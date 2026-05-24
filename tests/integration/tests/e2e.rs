@@ -12,7 +12,7 @@
 //!  1. `health_works`      6. `timeout`          11. `integer_key`
 //!  2. `manifest_works`    7. `parallel_calls`   12. `guid_key`
 //!  3. `counter_smoke`     8. `request_context`  13. `auth_metadata`
-//!  4. `unknown_method`    9. `protobuf_invoke`
+//!  4. `unknown_method`    9. `protobuf_invoke`  14. `client_options`
 //!  5. `invalid_payload`  10. `multi_argument`
 //!
 //! A separate `tls_end_to_end` test covers TLS.
@@ -47,7 +47,44 @@ async fn counter_end_to_end() -> anyhow::Result<()> {
     integer_key(&client).await?;
     guid_key(&client).await?;
     auth_metadata(&cluster).await?;
+    client_options(&cluster).await?;
 
+    Ok(())
+}
+
+async fn client_options(cluster: &TestCluster) -> anyhow::Result<()> {
+    use std::time::Duration;
+
+    use orleans_rust_client::{RequestContext, RetryPolicy};
+
+    // Exercise the full client builder surface and the grain-ref accessors.
+    let client = OrleansClient::builder(&cluster.bridge_url)
+        .default_timeout(Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(5))
+        .max_decoding_message_size(8 * 1024 * 1024)
+        .max_encoding_message_size(8 * 1024 * 1024)
+        .default_context(RequestContext::new().with("origin", "integration"))
+        .retry_policy(RetryPolicy::conservative())
+        .connect()
+        .await?;
+    assert_eq!(client.config().default_timeout, Duration::from_secs(10));
+
+    let counter = client
+        .grain(INTERFACE, GRAIN_TYPE, GrainKey::String("opts".into()))
+        .with_timeout(Duration::from_secs(5))
+        .with_context(RequestContext::new().with("origin", "call"));
+    assert_eq!(counter.interface_name(), INTERFACE);
+    assert_eq!(counter.grain_type(), GRAIN_TYPE);
+    assert_eq!(counter.key(), &GrainKey::String("opts".into()));
+
+    counter.invoke_json::<_, ()>("Reset", &()).await?;
+    let added: i64 = counter.invoke_json("Add", &1_i64).await?;
+    let (value, _context) = counter
+        .invoke_json_with_context::<_, i64>("Get", &())
+        .await?;
+    assert_eq!(added, 1);
+    assert_eq!(value, 1);
+    println!("[client_options] ok");
     Ok(())
 }
 
