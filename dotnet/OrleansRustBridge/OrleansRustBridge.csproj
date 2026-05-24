@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\..\proto\orleans_bridge.proto" GrpcServices="Server" ProtoRoot="..\..\proto" />
+    <Protobuf Include="..\..\crates\orleans-rust-client\proto\orleans_bridge.proto" GrpcServices="Server" ProtoRoot="..\..\crates\orleans-rust-client\proto" />
   </ItemGroup>
 
   <ItemGroup>

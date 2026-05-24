@@ -11,6 +11,7 @@ authors.workspace = true
 readme = "README.md"
 keywords = ["orleans", "grpc", "actor", "rpc", "client"]
 categories = ["network-programming", "asynchronous"]
+include = ["src/**/*.rs", "build.rs", "proto/**/*.proto", "README.md"]
 
 [features]
 default = ["json"]

@@ -51,9 +51,9 @@ guesses method signatures by reflection at call time.
 ## Repository layout
 
 ```text
-proto/                      The bridge gRPC contract (orleans.bridge.v1).
 crates/
   orleans-rust-client/      The Rust client crate.
+    proto/                  The bridge gRPC contract (orleans.bridge.v1).
   orleans-rust-codegen/     Manifest-driven typed-client generator + CLI.
 dotnet/
   OrleansRustBridge/            Reusable bridge: gRPC service, codecs, DI.
@@ -62,6 +62,10 @@ dotnet/
 examples/counter/           End-to-end counter sample (silo + bridge + Rust).
 tests/integration/          End-to-end integration tests.
 ```
+
+The gRPC contract lives inside the client crate (`crates/orleans-rust-client/proto/`)
+so the crate is self-contained and publishable; the .NET bridge references the
+same file.
 
 ## Quickstart
 
@@ -253,6 +257,26 @@ This project does not implement the Orleans gateway wire protocol,
 integration layer for Rust applications that need to call Orleans-backed
 services. It is not a general actor framework and does not aim to compete with
 Orleans.
+
+## Publishing
+
+The `orleans-rust-client` and `orleans-rust-codegen` crates are self-contained
+and publishable to crates.io (the gRPC contract is vendored inside the client
+crate). To cut a release:
+
+```sh
+# Verify the packages build in isolation.
+cargo package -p orleans-rust-client
+cargo package -p orleans-rust-codegen
+
+# Publish (codegen first if you want it available as a dependency).
+cargo publish -p orleans-rust-codegen
+cargo publish -p orleans-rust-client
+```
+
+`protoc` must be on `PATH` for the client's build script. The `dotnet/` bridge
+and the `examples/`/`tests/` crates are not published (the example and
+integration crates set `publish = false`). See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 
