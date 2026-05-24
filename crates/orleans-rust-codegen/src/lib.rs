@@ -6,9 +6,14 @@
 //! and produces one Rust struct per grain contract that wraps a
 //! [`orleans_rust_client::GrainRef`] with typed methods.
 //!
-//! Type mapping covers the common primitive .NET types; anything unrecognised
-//! falls back to `serde_json::Value`, keeping the generator robust against
-//! manifests it does not fully understand.
+//! Type mapping covers the common primitive .NET types plus nullable types,
+//! arrays, and the standard generic collections (`List<T>` → `Vec<T>`,
+//! `Dictionary<K, V>` → `HashMap<K, V>`, ...); anything unrecognised falls back
+//! to `serde_json::Value`, keeping the generator robust against manifests it
+//! does not fully understand. Methods with multiple parameters generate
+//! multi-argument functions (serialized as a JSON array), and an opt-in mode
+//! emits `<method>_with_context` variants that also return the response
+//! context.
 
 use heck::{ToPascalCase, ToSnakeCase};
 use serde::Deserialize;
@@ -59,14 +64,29 @@ pub struct GrainContract {
     pub supported_key_kinds: Vec<String>,
 }
 
+/// A single named method parameter.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MethodParameter {
+    /// Parameter name.
+    pub name: String,
+    /// .NET type name.
+    #[serde(rename = "type")]
+    pub ty: String,
+}
+
 /// A single grain method.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GrainMethod {
     /// Method name as exposed on the grain interface.
     pub name: String,
     /// Request (single-argument) .NET type name, or empty for no argument.
+    /// Ignored when `parameters` is present.
     #[serde(default)]
     pub request_type: String,
+    /// Full parameter list. When present, takes precedence over `request_type`
+    /// and enables multi-argument methods.
+    #[serde(default)]
+    pub parameters: Vec<MethodParameter>,
     /// Response .NET type name, or empty for no return value.
     #[serde(default)]
     pub response_type: String,
@@ -90,12 +110,16 @@ impl Manifest {
 pub struct CodegenOptions {
     /// Crate path used to reference the runtime client.
     pub client_crate: String,
+    /// Also generate `<method>_with_context` variants that return the
+    /// response-context map alongside the value.
+    pub with_response_context: bool,
 }
 
 impl Default for CodegenOptions {
     fn default() -> Self {
         Self {
             client_crate: "orleans_rust_client".to_owned(),
+            with_response_context: false,
         }
     }
 }
@@ -122,10 +146,7 @@ pub fn generate(manifest: &Manifest, options: &CodegenOptions) -> Result<String,
     Ok(out)
 }
 
-fn generate_grain(
-    grain: &GrainContract,
-    _options: &CodegenOptions,
-) -> Result<String, CodegenError> {
+fn generate_grain(grain: &GrainContract, options: &CodegenOptions) -> Result<String, CodegenError> {
     let struct_name = client_struct_name(&grain.interface_name)?;
     let key = KeyStrategy::from_kinds(&grain.supported_key_kinds);
 
@@ -148,30 +169,63 @@ fn generate_grain(
 
     for method in &grain.methods {
         s.push('\n');
-        s.push_str(&generate_method(method));
+        s.push_str(&generate_method(method, options));
     }
 
     s.push_str("}\n");
     Ok(s)
 }
 
-fn generate_method(method: &GrainMethod) -> String {
+fn generate_method(method: &GrainMethod, options: &CodegenOptions) -> String {
     let fn_name = sanitize_ident(&method.name.to_snake_case());
     let response_ty = map_type(&method.response_type);
 
-    let request_ty = map_type(&method.request_type);
-    let takes_arg = request_ty != "()";
-
-    let (signature_arg, call_arg) = if takes_arg {
-        (format!(", value: {request_ty}"), "&value".to_owned())
+    // Resolve the argument list: an explicit `parameters` list wins, otherwise
+    // fall back to the single `request_type`.
+    let args: Vec<(String, String)> = if !method.parameters.is_empty() {
+        method
+            .parameters
+            .iter()
+            .map(|p| (sanitize_ident(&p.name.to_snake_case()), map_type(&p.ty)))
+            .collect()
+    } else if map_type(&method.request_type) != "()" {
+        vec![("value".to_owned(), map_type(&method.request_type))]
     } else {
-        (String::new(), "&()".to_owned())
+        Vec::new()
     };
 
-    format!(
-        "    /// Invokes `{orig}`.\n    pub async fn {fn_name}(&self{signature_arg}) -> Result<{response_ty}, OrleansError> {{\n        self.inner.invoke_json(\"{orig}\", {call_arg}).await\n    }}\n",
+    let signature_args: String = args
+        .iter()
+        .map(|(name, ty)| format!(", {name}: {ty}"))
+        .collect();
+
+    // Serialize 0 args as `&()`, 1 as `&name`, N as a tuple `&(a, b, ...)`
+    // which serde encodes as a JSON array the bridge invoker can decode.
+    let call_arg = match args.as_slice() {
+        [] => "&()".to_owned(),
+        [(name, _)] => format!("&{name}"),
+        many => format!(
+            "&({})",
+            many.iter()
+                .map(|(name, _)| name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+
+    let mut out = format!(
+        "    /// Invokes `{orig}`.\n    pub async fn {fn_name}(&self{signature_args}) -> Result<{response_ty}, OrleansError> {{\n        self.inner.invoke_json(\"{orig}\", {call_arg}).await\n    }}\n",
         orig = method.name,
-    )
+    );
+
+    if options.with_response_context {
+        out.push_str(&format!(
+            "\n    /// Invokes `{orig}`, also returning the response context.\n    pub async fn {fn_name}_with_context(&self{signature_args}) -> Result<({response_ty}, std::collections::HashMap<String, String>), OrleansError> {{\n        self.inner.invoke_json_with_context(\"{orig}\", {call_arg}).await\n    }}\n",
+            orig = method.name,
+        ));
+    }
+
+    out
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -225,27 +279,164 @@ fn client_struct_name(interface_name: &str) -> Result<String, CodegenError> {
     Ok(format!("{base}Client"))
 }
 
-/// Map a .NET type name to a Rust type. Unknown types fall back to
+/// Map a .NET type name to a Rust type. Handles primitives, nullable types,
+/// arrays, and the common generic collections; unknown types fall back to
 /// `serde_json::Value` so generation never fails on an unfamiliar type.
 fn map_type(dotnet: &str) -> String {
     let normalized = dotnet.trim();
-    match normalized {
-        "" | "void" | "System.Void" | "System.Threading.Tasks.Task" => "()".to_owned(),
-        "System.String" | "string" => "String".to_owned(),
-        "System.Boolean" | "bool" => "bool".to_owned(),
-        "System.SByte" | "sbyte" => "i8".to_owned(),
-        "System.Byte" | "byte" => "u8".to_owned(),
-        "System.Int16" | "short" => "i16".to_owned(),
-        "System.UInt16" | "ushort" => "u16".to_owned(),
-        "System.Int32" | "int" => "i32".to_owned(),
-        "System.UInt32" | "uint" => "u32".to_owned(),
-        "System.Int64" | "long" => "i64".to_owned(),
-        "System.UInt64" | "ulong" => "u64".to_owned(),
-        "System.Single" | "float" => "f32".to_owned(),
-        "System.Double" | "double" => "f64".to_owned(),
-        "System.Guid" => "uuid::Uuid".to_owned(),
-        _ => "serde_json::Value".to_owned(),
+
+    // Reflection FullName uses a trailing assembly-qualified suffix on generic
+    // arguments (e.g. `[[System.Int64, mscorlib, ...]]`); strip it for matching.
+    if let Some(scalar) = map_scalar(normalized) {
+        return scalar;
     }
+
+    // Nullable<T> / `T?` -> Option<T>
+    if let Some(inner) = strip_nullable(normalized) {
+        return format!("Option<{}>", map_type(&inner));
+    }
+
+    // byte[] -> Vec<u8>; T[] -> Vec<T>
+    if let Some(element) = normalized.strip_suffix("[]") {
+        return format!("Vec<{}>", map_type(element));
+    }
+
+    // Generic collections.
+    if let Some((base, args)) = parse_generic(normalized) {
+        match (base.as_str(), args.as_slice()) {
+            (
+                "System.Collections.Generic.List"
+                | "System.Collections.Generic.IList"
+                | "System.Collections.Generic.IReadOnlyList"
+                | "System.Collections.Generic.ICollection"
+                | "System.Collections.Generic.IEnumerable"
+                | "List"
+                | "IList"
+                | "IReadOnlyList"
+                | "IEnumerable",
+                [item],
+            ) => return format!("Vec<{}>", map_type(item)),
+            (
+                "System.Collections.Generic.Dictionary"
+                | "System.Collections.Generic.IDictionary"
+                | "System.Collections.Generic.IReadOnlyDictionary"
+                | "Dictionary"
+                | "IDictionary",
+                [key, value],
+            ) => {
+                return format!(
+                    "std::collections::HashMap<{}, {}>",
+                    map_type(key),
+                    map_type(value)
+                );
+            }
+            ("System.Nullable" | "Nullable", [item]) => {
+                return format!("Option<{}>", map_type(item));
+            }
+            _ => {}
+        }
+    }
+
+    "serde_json::Value".to_owned()
+}
+
+fn map_scalar(normalized: &str) -> Option<String> {
+    let mapped = match normalized {
+        "" | "void" | "System.Void" | "System.Threading.Tasks.Task" => "()",
+        "System.String" | "string" => "String",
+        "System.Boolean" | "bool" => "bool",
+        "System.SByte" | "sbyte" => "i8",
+        "System.Byte" | "byte" => "u8",
+        "System.Int16" | "short" => "i16",
+        "System.UInt16" | "ushort" => "u16",
+        "System.Int32" | "int" => "i32",
+        "System.UInt32" | "uint" => "u32",
+        "System.Int64" | "long" => "i64",
+        "System.UInt64" | "ulong" => "u64",
+        "System.Single" | "float" => "f32",
+        "System.Double" | "double" => "f64",
+        "System.Guid" => "uuid::Uuid",
+        "System.DateTime"
+        | "System.DateTimeOffset"
+        | "System.TimeSpan"
+        | "System.Decimal"
+        | "decimal" => "String",
+        "System.Object" | "object" => "serde_json::Value",
+        _ => return None,
+    };
+    Some(mapped.to_owned())
+}
+
+/// Strip a `Nullable<T>` / `T?` wrapper, returning the inner type name.
+fn strip_nullable(normalized: &str) -> Option<String> {
+    if let Some(inner) = normalized.strip_suffix('?') {
+        return Some(inner.trim().to_owned());
+    }
+    None
+}
+
+/// Parse a generic type name into `(base, [arg, ...])`, supporting both C#
+/// source form (`List<System.Int64>`) and reflection form
+/// (`System.Collections.Generic.List`1[[System.Int64, mscorlib, ...]]`).
+fn parse_generic(name: &str) -> Option<(String, Vec<String>)> {
+    if let Some(open) = name.find('<') {
+        if !name.ends_with('>') {
+            return None;
+        }
+        let base = name[..open].trim().to_owned();
+        let inner = &name[open + 1..name.len() - 1];
+        return Some((base, split_top_level(inner)));
+    }
+
+    if let Some(tick) = name.find('`') {
+        let base = name[..tick].trim().to_owned();
+        let rest = &name[tick..];
+        let outer_open = rest.find('[')?;
+        let outer = rest[outer_open..].trim();
+        let inner = outer.strip_prefix('[')?.strip_suffix(']')?;
+        // `inner` is `[Type, asm, ...],[Type, asm, ...]`; each top-level group is
+        // an assembly-qualified type — take the type name before its first comma.
+        let args = split_top_level(inner)
+            .into_iter()
+            .map(|group| {
+                let group = group.trim();
+                let group = group.strip_prefix('[').unwrap_or(group);
+                let group = group.strip_suffix(']').unwrap_or(group);
+                group.split(',').next().unwrap_or(group).trim().to_owned()
+            })
+            .collect();
+        return Some((base, args));
+    }
+
+    None
+}
+
+/// Split a comma-separated generic argument list, respecting nested brackets.
+fn split_top_level(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut current = String::new();
+    for ch in input.chars() {
+        match ch {
+            '<' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            '>' | ']' => {
+                depth -= 1;
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                parts.push(current.trim().to_owned());
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_owned());
+    }
+    parts
 }
 
 fn sanitize_ident(name: &str) -> String {
@@ -265,6 +456,31 @@ fn sanitize_ident(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn method(name: &str, request: &str, response: &str) -> GrainMethod {
+        GrainMethod {
+            name: name.to_owned(),
+            request_type: request.to_owned(),
+            parameters: Vec::new(),
+            response_type: response.to_owned(),
+            payload_codec: "json".to_owned(),
+        }
+    }
+
+    fn grain(methods: Vec<GrainMethod>) -> Manifest {
+        Manifest {
+            service_id: "s".into(),
+            cluster_id: "c".into(),
+            bridge_version: "0.1.0".into(),
+            schema_version: "1".into(),
+            grains: vec![GrainContract {
+                interface_name: "Counter.Abstractions.ICounterGrain".into(),
+                grain_type: "counter".into(),
+                supported_key_kinds: vec!["string".into()],
+                methods,
+            }],
+        }
+    }
 
     #[test]
     fn derives_client_name() {
@@ -286,36 +502,75 @@ mod tests {
     }
 
     #[test]
+    fn maps_collections_and_options() {
+        assert_eq!(map_type("System.String?"), "Option<String>");
+        assert_eq!(map_type("System.Byte[]"), "Vec<u8>");
+        assert_eq!(map_type("System.Int32[]"), "Vec<i32>");
+        assert_eq!(map_type("List<System.Int64>"), "Vec<i64>");
+        assert_eq!(
+            map_type("Dictionary<System.String, System.Int32>"),
+            "std::collections::HashMap<String, i32>"
+        );
+    }
+
+    #[test]
+    fn maps_reflection_generic_names() {
+        assert_eq!(
+            map_type("System.Collections.Generic.List`1[[System.Int64, System.Private.CoreLib]]"),
+            "Vec<i64>"
+        );
+        assert_eq!(
+            map_type(
+                "System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[System.Int32, mscorlib]]"
+            ),
+            "std::collections::HashMap<String, i32>"
+        );
+    }
+
+    #[test]
     fn generates_counter_client() {
-        let manifest = Manifest {
-            service_id: "s".into(),
-            cluster_id: "c".into(),
-            bridge_version: "0.1.0".into(),
-            schema_version: "1".into(),
-            grains: vec![GrainContract {
-                interface_name: "Counter.Abstractions.ICounterGrain".into(),
-                grain_type: "counter".into(),
-                supported_key_kinds: vec!["string".into()],
-                methods: vec![
-                    GrainMethod {
-                        name: "Get".into(),
-                        request_type: String::new(),
-                        response_type: "System.Int64".into(),
-                        payload_codec: "json".into(),
-                    },
-                    GrainMethod {
-                        name: "Add".into(),
-                        request_type: "System.Int64".into(),
-                        response_type: "System.Int64".into(),
-                        payload_codec: "json".into(),
-                    },
-                ],
-            }],
-        };
+        let manifest = grain(vec![
+            method("Get", "", "System.Int64"),
+            method("Add", "System.Int64", "System.Int64"),
+        ]);
 
         let code = generate(&manifest, &CodegenOptions::default()).unwrap();
         assert!(code.contains("pub struct CounterGrainClient"));
         assert!(code.contains("pub async fn get(&self) -> Result<i64, OrleansError>"));
         assert!(code.contains("pub async fn add(&self, value: i64) -> Result<i64, OrleansError>"));
+    }
+
+    #[test]
+    fn generates_multi_argument_method() {
+        let mut transfer = method("Transfer", "", "System.Boolean");
+        transfer.parameters = vec![
+            MethodParameter {
+                name: "destination".into(),
+                ty: "System.String".into(),
+            },
+            MethodParameter {
+                name: "amount".into(),
+                ty: "System.Int64".into(),
+            },
+        ];
+
+        let code = generate(&grain(vec![transfer]), &CodegenOptions::default()).unwrap();
+        assert!(code.contains(
+            "pub async fn transfer(&self, destination: String, amount: i64) -> Result<bool, OrleansError>"
+        ));
+        assert!(code.contains("invoke_json(\"Transfer\", &(destination, amount))"));
+    }
+
+    #[test]
+    fn generates_response_context_variant() {
+        let options = CodegenOptions {
+            with_response_context: true,
+            ..Default::default()
+        };
+        let code = generate(&grain(vec![method("Get", "", "System.Int64")]), &options).unwrap();
+        assert!(code.contains(
+            "pub async fn get_with_context(&self) -> Result<(i64, std::collections::HashMap<String, String>), OrleansError>"
+        ));
+        assert!(code.contains("invoke_json_with_context(\"Get\", &())"));
     }
 }

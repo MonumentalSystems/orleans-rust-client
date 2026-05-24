@@ -126,11 +126,30 @@ impl GrainRef {
         Req: serde::Serialize + ?Sized,
         Resp: serde::de::DeserializeOwned,
     {
+        Ok(self.invoke_json_with_context(method, request).await?.0)
+    }
+
+    /// Like [`GrainRef::invoke_json`], but also returns the response-context
+    /// entries the grain produced.
+    ///
+    /// # Errors
+    /// See [`GrainRef::invoke_json`].
+    #[cfg(feature = "json")]
+    pub async fn invoke_json_with_context<Req, Resp>(
+        &self,
+        method: &str,
+        request: &Req,
+    ) -> Result<(Resp, std::collections::HashMap<String, String>), OrleansError>
+    where
+        Req: serde::Serialize + ?Sized,
+        Resp: serde::de::DeserializeOwned,
+    {
         let payload =
             serde_json::to_vec(request).map_err(|e| OrleansError::Serialization(e.to_string()))?;
         let response = self.invoke(method, payload, "json").await?;
-        serde_json::from_slice(&response.payload)
-            .map_err(|e| OrleansError::Serialization(e.to_string()))
+        let value = serde_json::from_slice(&response.payload)
+            .map_err(|e| OrleansError::Serialization(e.to_string()))?;
+        Ok((value, response.response_context))
     }
 
     /// Invoke `method` with a protobuf-encoded request and response.
