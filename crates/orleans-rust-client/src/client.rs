@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tonic::metadata::{Ascii, AsciiMetadataValue, MetadataKey};
 use tonic::transport::{Channel, Endpoint};
 
 use crate::config::{ClientConfig, TlsConfig};
@@ -25,6 +26,7 @@ pub struct OrleansClient {
     inner: BridgeClient,
     config: Arc<ClientConfig>,
     retry: Arc<RetryPolicy>,
+    metadata: Arc<Vec<(MetadataKey<Ascii>, AsciiMetadataValue)>>,
 }
 
 /// Borrowed parameters for a single raw invocation.
@@ -91,6 +93,8 @@ impl OrleansClient {
             endpoint = endpoint.connect_timeout(connect_timeout);
         }
 
+        let metadata = build_metadata(&config.metadata)?;
+
         let channel = endpoint.connect().await?;
         let mut client = BridgeClient::new(channel);
         if let Some(n) = config.max_decoding_message_size {
@@ -104,7 +108,19 @@ impl OrleansClient {
             inner: client,
             config: Arc::new(config),
             retry: Arc::new(retry),
+            metadata: Arc::new(metadata),
         })
+    }
+
+    /// Wrap a message in a request carrying the client's configured metadata
+    /// (e.g. an `authorization` header).
+    fn request<T>(&self, message: T) -> tonic::Request<T> {
+        let mut request = tonic::Request::new(message);
+        let metadata = request.metadata_mut();
+        for (key, value) in self.metadata.iter() {
+            metadata.insert(key.clone(), value.clone());
+        }
+        request
     }
 
     /// The configuration this client was built with.
@@ -120,7 +136,7 @@ impl OrleansClient {
     pub async fn health(&self) -> Result<pb::HealthResponse, OrleansError> {
         let mut client = self.inner.clone();
         let response = client
-            .health(pb::HealthRequest {})
+            .health(self.request(pb::HealthRequest {}))
             .await
             .map_err(OrleansError::from_status)?;
         Ok(response.into_inner())
@@ -133,7 +149,7 @@ impl OrleansClient {
     pub async fn manifest(&self) -> Result<pb::ContractManifest, OrleansError> {
         let mut client = self.inner.clone();
         let response = client
-            .get_manifest(pb::GetManifestRequest {})
+            .get_manifest(self.request(pb::GetManifestRequest {}))
             .await
             .map_err(OrleansError::from_status)?;
         Ok(response.into_inner().manifest.unwrap_or_default())
@@ -199,7 +215,7 @@ impl OrleansClient {
 
     async fn invoke_once(
         &self,
-        request: pb::InvokeRequest,
+        message: pb::InvokeRequest,
         timeout: Duration,
     ) -> Result<RawResponse, OrleansError> {
         let mut client = self.inner.clone();
@@ -209,7 +225,7 @@ impl OrleansClient {
         // `Cancelled` status ("Timeout expired"), masking the richer error.
         // Instead we apply a slightly longer client-side backstop so a hung
         // connection still fails rather than hanging forever.
-        let request = tonic::Request::new(request);
+        let request = self.request(message);
         let guard = timeout.saturating_add(Duration::from_secs(5));
         let call = client.invoke(request);
         let result = match tokio::time::timeout(guard, call).await {
@@ -294,11 +310,88 @@ impl OrleansClientBuilder {
         self
     }
 
+    /// Attach a static gRPC metadata header to every request. The key must be
+    /// a valid ASCII header name and the value valid ASCII; both are validated
+    /// when the client is built.
+    #[must_use]
+    pub fn metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.config.metadata.push((key.into(), value.into()));
+        self
+    }
+
+    /// Attach an `authorization: Bearer <token>` header to every request, for a
+    /// JWT-validating proxy in front of the bridge.
+    #[must_use]
+    pub fn bearer_token(self, token: impl AsRef<str>) -> Self {
+        self.metadata("authorization", format!("Bearer {}", token.as_ref()))
+    }
+
+    /// Attach an API-key header (e.g. `x-api-key`) to every request.
+    #[must_use]
+    pub fn api_key(self, header: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata(header, value)
+    }
+
     /// Connect using the accumulated settings.
     ///
     /// # Errors
     /// See [`OrleansClient::connect`].
     pub async fn connect(self) -> Result<OrleansClient, OrleansError> {
         OrleansClient::build(self.config, self.retry).await
+    }
+}
+
+// Cold path (runs once at connect time), so returning the large error enum by
+// value is fine.
+#[allow(clippy::result_large_err)]
+fn build_metadata(
+    entries: &[(String, String)],
+) -> Result<Vec<(MetadataKey<Ascii>, AsciiMetadataValue)>, OrleansError> {
+    let mut out = Vec::with_capacity(entries.len());
+    for (key, value) in entries {
+        let parsed_key = MetadataKey::<Ascii>::from_bytes(key.to_ascii_lowercase().as_bytes())
+            .map_err(|_| OrleansError::InvalidConfig(format!("invalid metadata key: {key:?}")))?;
+        let parsed_value = AsciiMetadataValue::try_from(value.as_str()).map_err(|_| {
+            OrleansError::InvalidConfig(format!("invalid metadata value for {key:?}"))
+        })?;
+        out.push((parsed_key, parsed_value));
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_valid_metadata() {
+        let entries = vec![
+            ("authorization".to_owned(), "Bearer abc.def".to_owned()),
+            ("x-api-key".to_owned(), "key123".to_owned()),
+        ];
+        let built = build_metadata(&entries).expect("valid metadata");
+        assert_eq!(built.len(), 2);
+        assert_eq!(built[0].0.as_str(), "authorization");
+    }
+
+    #[test]
+    fn lowercases_header_names() {
+        let entries = vec![("Authorization".to_owned(), "Bearer t".to_owned())];
+        let built = build_metadata(&entries).unwrap();
+        assert_eq!(built[0].0.as_str(), "authorization");
+    }
+
+    #[test]
+    fn rejects_invalid_key() {
+        let entries = vec![("bad key".to_owned(), "v".to_owned())];
+        let error = build_metadata(&entries).unwrap_err();
+        assert!(matches!(error, OrleansError::InvalidConfig(_)));
+    }
+
+    #[test]
+    fn rejects_invalid_value() {
+        let entries = vec![("authorization".to_owned(), "bad\nvalue".to_owned())];
+        let error = build_metadata(&entries).unwrap_err();
+        assert!(matches!(error, OrleansError::InvalidConfig(_)));
     }
 }

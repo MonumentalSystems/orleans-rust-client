@@ -39,6 +39,10 @@ pub struct ClientConfig {
     pub default_context: RequestContext,
     /// Transport security (see [`TlsConfig`]).
     pub tls: Option<TlsConfig>,
+    /// Static gRPC metadata (ASCII header name/value pairs) attached to every
+    /// request — typically an `authorization` bearer token or an API-key
+    /// header validated by a proxy in front of the bridge.
+    pub metadata: Vec<(String, String)>,
 }
 
 impl ClientConfig {
@@ -53,6 +57,7 @@ impl ClientConfig {
             max_encoding_message_size: Some(16 * 1024 * 1024),
             default_context: RequestContext::new(),
             tls: None,
+            metadata: Vec::new(),
         }
     }
 }

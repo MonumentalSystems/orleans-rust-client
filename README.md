@@ -182,6 +182,19 @@ Structured errors travel in a `bridge-error-bin` gRPC trailer, so the stable
 code survives regardless of the transport status. Exception detail is omitted
 unless `BridgeOptions.IncludeExceptionDetail` is enabled (development only).
 
+## Authentication
+
+The client can attach static gRPC metadata to every request so the bridge can
+sit behind a JWT- or API-key-validating proxy:
+
+```rust
+let client = OrleansClient::builder("http://127.0.0.1:50051")
+    .bearer_token(std::env::var("ORLEANS_BRIDGE_TOKEN")?)
+    .api_key("x-api-key", "…")
+    .connect()
+    .await?;
+```
+
 ## Security notes
 
 The bridge is a privileged backend component. Do not expose it publicly without
