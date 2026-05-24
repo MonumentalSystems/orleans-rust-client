@@ -4,7 +4,7 @@
 //! This is intentionally limited (see the repository roadmap). It consumes a
 //! manifest emitted by the .NET bridge (`GetManifest` / `OrleansRustBridge.Tools`)
 //! and produces one Rust struct per grain contract that wraps a
-//! [`orleans_rust_client::GrainRef`] with typed methods.
+//! `orleans_rust_client::GrainRef` with typed methods.
 //!
 //! Type mapping covers the common primitive .NET types plus nullable types,
 //! arrays, and the standard generic collections (`List<T>` → `Vec<T>`,
