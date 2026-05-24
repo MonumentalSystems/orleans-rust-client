@@ -9,10 +9,11 @@
 //! A single test owns one [`TestCluster`] (so its processes are cleaned up via
 //! `Drop`) and exercises every scenario from the build brief in sequence:
 //!
-//! 1. `health_works`      5. `invalid_payload`   9. `protobuf_invoke`
-//! 2. `manifest_works`    6. `timeout`          10. `auth_metadata`
-//! 3. `counter_smoke`     7. `parallel_calls`
-//! 4. `unknown_method`    8. `request_context`
+//!  1. `health_works`      6. `timeout`          11. `integer_key`
+//!  2. `manifest_works`    7. `parallel_calls`   12. `guid_key`
+//!  3. `counter_smoke`     8. `request_context`  13. `auth_metadata`
+//!  4. `unknown_method`    9. `protobuf_invoke`
+//!  5. `invalid_payload`  10. `multi_argument`
 //!
 //! A separate `tls_end_to_end` test covers TLS.
 
@@ -42,8 +43,59 @@ async fn counter_end_to_end() -> anyhow::Result<()> {
     parallel_calls(&client).await?;
     request_context(&client).await?;
     protobuf_invoke(&client).await?;
+    multi_argument(&client).await?;
+    integer_key(&client).await?;
+    guid_key(&client).await?;
     auth_metadata(&cluster).await?;
 
+    Ok(())
+}
+
+async fn multi_argument(client: &OrleansClient) -> anyhow::Result<()> {
+    // `Adjust(delta, floor)` is a two-argument method; the client serializes
+    // the tuple as a JSON array the bridge invoker decodes positionally.
+    let counter = client.grain(INTERFACE, GRAIN_TYPE, GrainKey::String("multi".into()));
+    counter.invoke_json::<_, ()>("Reset", &()).await?;
+
+    let raised: i64 = counter.invoke_json("Adjust", &(5_i64, 0_i64)).await?;
+    assert_eq!(raised, 5);
+
+    // delta drops below the floor, so the result clamps to the floor.
+    let clamped: i64 = counter.invoke_json("Adjust", &(-100_i64, 2_i64)).await?;
+    assert_eq!(clamped, 2);
+
+    println!("[multi_argument] ok: raised={raised}, clamped={clamped}");
+    Ok(())
+}
+
+async fn integer_key(client: &OrleansClient) -> anyhow::Result<()> {
+    // Exercises GrainKey::Int64 against an IGrainWithIntegerKey grain.
+    let acc = client.grain(
+        "Counter.Abstractions.IAccumulatorGrain",
+        "accumulator",
+        GrainKey::Int64(42),
+    );
+    let after_add: i64 = acc.invoke_json("Add", &10_i64).await?;
+    let value: i64 = acc.invoke_json("Get", &()).await?;
+    assert_eq!(after_add, 10);
+    assert_eq!(value, 10);
+    println!("[integer_key] ok: value={value}");
+    Ok(())
+}
+
+async fn guid_key(client: &OrleansClient) -> anyhow::Result<()> {
+    // Exercises GrainKey::Guid against an IGrainWithGuidKey grain.
+    let id = uuid::Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
+    let register = client.grain(
+        "Counter.Abstractions.IRegisterGrain",
+        "register",
+        GrainKey::Guid(id),
+    );
+    let set: String = register.invoke_json("Set", &"hello").await?;
+    let value: String = register.invoke_json("Get", &()).await?;
+    assert_eq!(set, "hello");
+    assert_eq!(value, "hello");
+    println!("[guid_key] ok: value={value}");
     Ok(())
 }
 
@@ -93,7 +145,17 @@ async fn manifest_works(client: &OrleansClient) -> anyhow::Result<()> {
             "manifest missing method {expected}; have {method_names:?}"
         );
     }
-    println!("[manifest_works] ok: methods={method_names:?}");
+
+    // The runtime manifest carries per-method parameters for multi-arg methods.
+    let adjust = counter
+        .methods
+        .iter()
+        .find(|m| m.name == "Adjust")
+        .expect("Adjust method present");
+    let param_names: Vec<&str> = adjust.parameters.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(param_names, ["delta", "floor"]);
+
+    println!("[manifest_works] ok: methods={method_names:?}, Adjust params={param_names:?}");
     Ok(())
 }
 

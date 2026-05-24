@@ -4,14 +4,18 @@ namespace OrleansRustBridge.Abstractions;
 
 /// <summary>Describes a single dispatchable grain method.</summary>
 /// <param name="Name">Method name as exposed on the grain interface.</param>
-/// <param name="RequestType">Single-argument .NET type name, or empty for none.</param>
+/// <param name="RequestType">First-argument .NET type name, or empty for none.</param>
 /// <param name="ResponseType">Response .NET type name, or empty for void.</param>
 /// <param name="PayloadCodec">Codec used for this method's payloads.</param>
 public sealed record BridgeMethodDescriptor(
     string Name,
     string RequestType,
     string ResponseType,
-    string PayloadCodec = "json");
+    string PayloadCodec = "json")
+{
+    /// <summary>Full parameter list (enables multi-argument methods).</summary>
+    public IReadOnlyList<MethodParameterDescriptor> Parameters { get; init; } = [];
+}
 
 /// <summary>
 /// Dispatches a generic bridge invocation to a strongly typed Orleans grain

@@ -42,10 +42,14 @@ async fn main() -> anyhow::Result<()> {
     let typed = CounterGrainClient::new(client.clone(), "demo-typed");
     typed.reset().await?;
     typed.add(40).await?;
-    let two = typed.add(2).await?;
+    typed.add(2).await?;
     let total = typed.get().await?;
-    println!("typed API: add(40), add(2) -> {two}, get() -> {total}");
     assert_eq!(total, 42);
+
+    // Multi-argument method, generated from the manifest's parameter list.
+    let adjusted = typed.adjust(-50, 10).await?; // max(42 - 50, 10) = 10
+    assert_eq!(adjusted, 10);
+    println!("typed API: get() -> {total}, adjust(-50, 10) -> {adjusted}");
 
     println!("counter value: {total}");
     Ok(())

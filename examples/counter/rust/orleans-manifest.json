@@ -7,13 +7,71 @@
     {
       "interface_name": "Counter.Abstractions.ICounterGrain",
       "grain_type": "counter",
-      "supported_key_kinds": ["string"],
       "methods": [
-        { "name": "Get", "request_type": "", "response_type": "System.Int64", "payload_codec": "json" },
-        { "name": "Add", "request_type": "System.Int64", "response_type": "System.Int64", "payload_codec": "json" },
-        { "name": "Reset", "request_type": "", "response_type": "", "payload_codec": "json" },
-        { "name": "Delay", "request_type": "System.Int32", "response_type": "System.Int64", "payload_codec": "json" },
-        { "name": "WhoCalled", "request_type": "", "response_type": "System.String", "payload_codec": "json" }
+        {
+          "name": "Get",
+          "request_type": "",
+          "response_type": "System.Int64",
+          "payload_codec": "json",
+          "parameters": []
+        },
+        {
+          "name": "Add",
+          "request_type": "System.Int64",
+          "response_type": "System.Int64",
+          "payload_codec": "json",
+          "parameters": [
+            {
+              "name": "value",
+              "type": "System.Int64"
+            }
+          ]
+        },
+        {
+          "name": "Reset",
+          "request_type": "",
+          "response_type": "",
+          "payload_codec": "json",
+          "parameters": []
+        },
+        {
+          "name": "Delay",
+          "request_type": "System.Int32",
+          "response_type": "System.Int64",
+          "payload_codec": "json",
+          "parameters": [
+            {
+              "name": "milliseconds",
+              "type": "System.Int32"
+            }
+          ]
+        },
+        {
+          "name": "WhoCalled",
+          "request_type": "",
+          "response_type": "System.String",
+          "payload_codec": "json",
+          "parameters": []
+        },
+        {
+          "name": "Adjust",
+          "request_type": "System.Int64",
+          "response_type": "System.Int64",
+          "payload_codec": "json",
+          "parameters": [
+            {
+              "name": "delta",
+              "type": "System.Int64"
+            },
+            {
+              "name": "floor",
+              "type": "System.Int64"
+            }
+          ]
+        }
+      ],
+      "supported_key_kinds": [
+        "string"
       ]
     }
   ]

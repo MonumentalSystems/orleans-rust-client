@@ -57,6 +57,12 @@ message GrainMethod {
   string request_type = 2;
   string response_type = 3;
   string payload_codec = 4;
+  repeated GrainMethodParameter parameters = 5;
+}
+
+message GrainMethodParameter {
+  string name = 1;
+  string type_name = 2;
 }
 
 message InvokeRequest {

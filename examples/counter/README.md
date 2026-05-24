@@ -8,10 +8,13 @@ a generated typed client.
 
 | Project | What it is |
 | --- | --- |
-| `dotnet/Counter.Abstractions` | The `ICounterGrain` interface. |
-| `dotnet/Counter.Silo` | An Orleans silo hosting `CounterGrain`. |
-| `dotnet/Counter.Bridge` | A bridge host registering `CounterGrainInvoker`. |
-| `rust/` | A Rust binary that calls the grain through the bridge. |
+| `dotnet/Counter.Abstractions` | Grain interfaces: `ICounterGrain` (string key, incl. the multi-arg `Adjust`), `IAccumulatorGrain` (int64 key), `IRegisterGrain` (GUID key). |
+| `dotnet/Counter.Silo` | An Orleans silo hosting the grain implementations. |
+| `dotnet/Counter.Bridge` | A bridge host registering the grain invokers. |
+| `rust/` | A Rust binary that calls the counter grain through the bridge. |
+
+The three grains exist to exercise all three grain-key kinds and a
+multi-argument method end-to-end (see the integration tests).
 
 ## Run it
 

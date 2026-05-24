@@ -22,6 +22,14 @@ public sealed class CounterGrainInvoker : IBridgeGrainInvoker
         new BridgeMethodDescriptor("Reset", string.Empty, string.Empty),
         new BridgeMethodDescriptor("Delay", "System.Int32", "System.Int64"),
         new BridgeMethodDescriptor("WhoCalled", string.Empty, "System.String"),
+        new BridgeMethodDescriptor("Adjust", string.Empty, "System.Int64")
+        {
+            Parameters =
+            [
+                new MethodParameterDescriptor("delta", "System.Int64"),
+                new MethodParameterDescriptor("floor", "System.Int64"),
+            ],
+        },
     };
 
     /// <inheritdoc />
@@ -72,6 +80,10 @@ public sealed class CounterGrainInvoker : IBridgeGrainInvoker
                 return invocation.Encode(await grain.Delay(invocation.DecodeRequest<int>()));
             case "WhoCalled":
                 return invocation.Encode(await grain.WhoCalled());
+            case "Adjust":
+                return invocation.Encode(await grain.Adjust(
+                    invocation.DecodeArgument<long>(0),
+                    invocation.DecodeArgument<long>(1)));
             default:
                 throw BridgeException.UnknownMethod(InterfaceName, invocation.Method);
         }

@@ -659,6 +659,7 @@ dependencies = [
  "prost-build",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

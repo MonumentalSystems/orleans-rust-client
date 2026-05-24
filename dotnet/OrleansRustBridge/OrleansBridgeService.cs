@@ -186,13 +186,23 @@ public sealed class OrleansBridgeService : OrleansBridge.OrleansBridgeBase
             contract.SupportedKeyKinds.AddRange(invoker.SupportedKeyKinds);
             foreach (var method in invoker.Methods)
             {
-                contract.Methods.Add(new GrainMethod
+                var grainMethod = new GrainMethod
                 {
                     Name = method.Name,
                     RequestType = method.RequestType,
                     ResponseType = method.ResponseType,
                     PayloadCodec = method.PayloadCodec,
-                });
+                };
+                foreach (var parameter in method.Parameters)
+                {
+                    grainMethod.Parameters.Add(new GrainMethodParameter
+                    {
+                        Name = parameter.Name,
+                        TypeName = parameter.Type,
+                    });
+                }
+
+                contract.Methods.Add(grainMethod);
             }
 
             manifest.Grains.Add(contract);
