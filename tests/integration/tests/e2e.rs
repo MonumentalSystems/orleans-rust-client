@@ -9,12 +9,20 @@
 //! A single test owns one [`TestCluster`] (so its processes are cleaned up via
 //! `Drop`) and exercises every scenario from the build brief in sequence:
 //!
-//! 1. `health_works`      4. `unknown_method`   7. `parallel_calls`
-//! 2. `manifest_works`    5. `invalid_payload`  8. `request_context`
-//! 3. `counter_smoke`     6. `timeout`          9. `auth_metadata`
+//! 1. `health_works`      5. `invalid_payload`   9. `protobuf_invoke`
+//! 2. `manifest_works`    6. `timeout`          10. `auth_metadata`
+//! 3. `counter_smoke`     7. `parallel_calls`
+//! 4. `unknown_method`    8. `request_context`
+//!
+//! A separate `tls_end_to_end` test covers TLS.
 
 use orleans_bridge_integration::TestCluster;
 use orleans_rust_client::{GrainKey, OrleansClient, OrleansError, codes};
+
+#[allow(clippy::all)]
+mod counter_messages {
+    include!(concat!(env!("OUT_DIR"), "/counter.v1.rs"));
+}
 
 const INTERFACE: &str = "Counter.Abstractions.ICounterGrain";
 const GRAIN_TYPE: &str = "counter";
@@ -33,8 +41,30 @@ async fn counter_end_to_end() -> anyhow::Result<()> {
     timeout(&client).await?;
     parallel_calls(&client).await?;
     request_context(&client).await?;
+    protobuf_invoke(&client).await?;
     auth_metadata(&cluster).await?;
 
+    Ok(())
+}
+
+async fn protobuf_invoke(client: &OrleansClient) -> anyhow::Result<()> {
+    use counter_messages::{AddRequest, CounterValue};
+
+    // Exercises the optional protobuf codec end-to-end: the request and
+    // response are protobuf messages decoded/encoded by the bridge invoker.
+    let counter = client.grain(INTERFACE, GRAIN_TYPE, GrainKey::String("protobuf".into()));
+
+    let first: CounterValue = counter
+        .invoke_protobuf("Add", &AddRequest { amount: 10 })
+        .await?;
+    assert_eq!(first.value, 10);
+
+    let second: CounterValue = counter
+        .invoke_protobuf("Add", &AddRequest { amount: 32 })
+        .await?;
+    assert_eq!(second.value, 42);
+
+    println!("[protobuf_invoke] ok: value={}", second.value);
     Ok(())
 }
 

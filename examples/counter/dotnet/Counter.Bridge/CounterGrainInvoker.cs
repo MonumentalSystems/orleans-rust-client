@@ -1,4 +1,5 @@
 using Counter.Abstractions;
+using Counter.Messages;
 
 using Orleans;
 
@@ -42,6 +43,21 @@ public sealed class CounterGrainInvoker : IBridgeGrainInvoker
         CancellationToken cancellationToken)
     {
         var grain = client.GetGrain<ICounterGrain>(invocation.Key.AsString());
+
+        // The protobuf codec maps a couple of methods to protobuf message
+        // shapes; everything else uses the JSON path below.
+        if (invocation.Codec.Name == "protobuf")
+        {
+            return invocation.Method switch
+            {
+                "Add" => invocation.Encode(new CounterValue
+                {
+                    Value = await grain.Add(invocation.DecodeRequest<AddRequest>().Amount),
+                }),
+                "Get" => invocation.Encode(new CounterValue { Value = await grain.Get() }),
+                _ => throw BridgeException.UnknownMethod($"{InterfaceName} (protobuf)", invocation.Method),
+            };
+        }
 
         switch (invocation.Method)
         {

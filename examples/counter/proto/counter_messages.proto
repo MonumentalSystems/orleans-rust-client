@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package counter.v1;
+
+option csharp_namespace = "Counter.Messages";
+
+// Request/response messages for exercising the bridge's optional protobuf
+// payload codec end-to-end. The bridge transport treats these as opaque bytes;
+// only the grain invoker (C#) and the client (Rust) understand their shape.
+
+message AddRequest {
+  int64 amount = 1;
+}
+
+message CounterValue {
+  int64 value = 1;
+}

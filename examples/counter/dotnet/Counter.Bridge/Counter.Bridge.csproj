@@ -7,6 +7,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
+    <PackageReference Include="Google.Protobuf" Version="$(GoogleProtobufVersion)" />
+    <PackageReference Include="Grpc.Tools" Version="$(GrpcToolsVersion)" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\..\proto\counter_messages.proto" GrpcServices="None" ProtoRoot="..\..\proto" />
   </ItemGroup>
 
   <ItemGroup>
