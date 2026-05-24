@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 DOTNET_SLN := orleans-rust-client.slnx
 
-.PHONY: all check rust-fmt rust-clippy rust-test rust-build dotnet-build dotnet-format e2e clean help
+.PHONY: all check rust-fmt rust-clippy rust-test rust-build dotnet-build dotnet-format dotnet-test e2e clean help
 
 all: check
 
@@ -14,11 +14,12 @@ help:
 	@echo "  rust-test     Run Rust unit/doc tests"
 	@echo "  dotnet-build  Build the .NET solution (Release)"
 	@echo "  dotnet-format Verify .NET formatting"
+	@echo "  dotnet-test   Run the .NET unit tests"
 	@echo "  e2e           End-to-end: start a silo + bridge, run the Rust client"
 	@echo "  clean         Remove build artifacts"
 
 # Full local verification. There is no hosted CI; run this before pushing.
-check: rust-fmt rust-clippy rust-test dotnet-format dotnet-build e2e
+check: rust-fmt rust-clippy rust-test dotnet-format dotnet-build dotnet-test e2e
 
 rust-build:
 	cargo build --workspace
@@ -37,6 +38,9 @@ dotnet-build:
 
 dotnet-format:
 	dotnet format $(DOTNET_SLN) --verify-no-changes
+
+dotnet-test:
+	dotnet test $(DOTNET_SLN) -c Release
 
 # Requires the .NET SDK and protoc; builds the sample, starts a silo + bridge,
 # and runs the Rust client against them.
