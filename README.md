@@ -158,6 +158,18 @@ Targets **.NET 10** and **Microsoft.Orleans 10.x** (pinned to `10.1.0` in
 consume earlier Orleans 9.x packages if you need to pin lower; adjust
 `OrleansVersion` accordingly.
 
+Builds and runs on **x86-64 and arm64** (Linux and macOS); there is no
+architecture-specific code, and all dependencies (tonic/prost, rustls/ring, the
+.NET runtime) ship for both.
+
+## Grain keys
+
+All three single-key kinds are supported and covered end-to-end:
+`GrainKey::String` (`IGrainWithStringKey`), `GrainKey::Int64`
+(`IGrainWithIntegerKey`), and `GrainKey::Guid` (`IGrainWithGuidKey`). Methods may
+take multiple arguments — the generated typed client serializes them as a JSON
+array the bridge invoker decodes positionally.
+
 ## Supported payload codecs
 
 - `json` (default) — uses `System.Text.Json` on the bridge and `serde_json` in

@@ -53,6 +53,8 @@ builder.Services.AddOrleansRustBridge(options =>
     options.PayloadCodecs = ["json", "protobuf"];
 });
 builder.Services.AddSingleton<IBridgeGrainInvoker, CounterGrainInvoker>();
+builder.Services.AddSingleton<IBridgeGrainInvoker, AccumulatorGrainInvoker>();
+builder.Services.AddSingleton<IBridgeGrainInvoker, RegisterGrainInvoker>();
 
 var app = builder.Build();
 app.MapOrleansRustBridge();

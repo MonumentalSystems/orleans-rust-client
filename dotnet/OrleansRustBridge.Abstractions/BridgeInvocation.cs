@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace OrleansRustBridge.Abstractions;
 
 /// <summary>
@@ -8,6 +10,8 @@ namespace OrleansRustBridge.Abstractions;
 /// </summary>
 public sealed class BridgeInvocation
 {
+    private static readonly JsonSerializerOptions ArgumentOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>Create an invocation context.</summary>
     public BridgeInvocation(BridgeGrainKey key, string method, ReadOnlyMemory<byte> payload, IPayloadCodec codec)
     {
@@ -43,6 +47,32 @@ public sealed class BridgeInvocation
         {
             throw BridgeException.InvalidPayload(
                 $"could not decode request for '{Method}' as {typeof(T).Name}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Decode the argument at <paramref name="index"/> from a multi-argument
+    /// request. Multi-argument payloads are a JSON array of positional
+    /// arguments (as produced by the generated multi-arg client methods).
+    /// </summary>
+    public T DecodeArgument<T>(int index)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(Payload);
+            var root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Array || index >= root.GetArrayLength())
+            {
+                throw BridgeException.InvalidPayload(
+                    $"expected a JSON array argument at index {index} for '{Method}'");
+            }
+
+            return root[index].Deserialize<T>(ArgumentOptions)!;
+        }
+        catch (Exception ex) when (ex is not BridgeException)
+        {
+            throw BridgeException.InvalidPayload(
+                $"could not decode argument {index} for '{Method}' as {typeof(T).Name}", ex);
         }
     }
 
