@@ -112,5 +112,19 @@ mod tests {
         assert!(config.tls.is_none());
         assert!(config.default_context.is_empty());
         assert!(config.max_decoding_message_size.is_some());
+        assert!(config.metadata.is_empty());
+    }
+
+    #[test]
+    fn tls_config_builders_set_fields() {
+        let tls = TlsConfig::new()
+            .with_domain_name("example.com")
+            .with_ca_certificate_pem(b"ca-pem".to_vec())
+            .with_client_identity_pem(b"cert".to_vec(), b"key".to_vec());
+        assert_eq!(tls.domain_name.as_deref(), Some("example.com"));
+        assert_eq!(tls.ca_certificate_pem.as_deref(), Some(&b"ca-pem"[..]));
+        let (cert, key) = tls.client_identity_pem.expect("identity set");
+        assert_eq!(cert, b"cert");
+        assert_eq!(key, b"key");
     }
 }

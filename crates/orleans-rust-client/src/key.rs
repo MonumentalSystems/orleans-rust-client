@@ -120,5 +120,7 @@ mod tests {
     fn display_round_trips_value() {
         assert_eq!(GrainKey::Int64(42).to_string(), "42");
         assert_eq!(GrainKey::String("abc".into()).to_string(), "abc");
+        let id = Uuid::from_u128(0x1234);
+        assert_eq!(GrainKey::Guid(id).to_string(), id.to_string());
     }
 }

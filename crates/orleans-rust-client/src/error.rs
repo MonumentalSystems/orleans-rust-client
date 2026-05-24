@@ -208,4 +208,26 @@ mod tests {
         assert!(matches!(other, OrleansError::Status(_)));
         assert_eq!(other.code(), None);
     }
+
+    #[test]
+    fn cancelled_status_maps_to_cancelled_code() {
+        let err = OrleansError::from_status(tonic::Status::cancelled("stop"));
+        assert_eq!(err.code(), Some(codes::CANCELLED));
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn non_bridge_errors_have_no_code_and_are_not_retryable() {
+        let serialization = OrleansError::Serialization("bad".to_owned());
+        assert_eq!(serialization.code(), None);
+        assert!(!serialization.is_retryable());
+        assert!(serialization.to_string().contains("serialization error"));
+
+        let config = OrleansError::InvalidConfig("nope".to_owned());
+        assert_eq!(config.code(), None);
+        assert!(!config.is_retryable());
+
+        assert_eq!(OrleansError::Timeout.to_string(), "timeout");
+        assert!(!OrleansError::Timeout.is_retryable());
+    }
 }
