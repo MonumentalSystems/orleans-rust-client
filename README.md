@@ -162,9 +162,19 @@ consume earlier Orleans 9.x packages if you need to pin lower; adjust
 
 - `json` (default) — uses `System.Text.Json` on the bridge and `serde_json` in
   Rust. Best for debugging and getting started.
-- `protobuf` (optional) — opaque, caller-encoded `IMessage` payloads. Enable the
-  `protobuf` Cargo feature on the client and add `protobuf` to the bridge's
-  `PayloadCodecs`.
+- `protobuf` (optional) — opaque, caller-encoded payloads. Enable the
+  `protobuf` Cargo feature on the client, add `protobuf` to the bridge's
+  `PayloadCodecs`, and have the invoker decode/encode `IMessage` types. The
+  request and response are protobuf messages shared by both sides (see
+  `examples/counter/proto/counter_messages.proto`):
+
+  ```rust
+  let value: CounterValue = counter
+      .invoke_protobuf("Add", &AddRequest { amount: 10 })
+      .await?;
+  ```
+
+  This path is covered end-to-end by the `protobuf_invoke` integration scenario.
 
 ## Error model
 

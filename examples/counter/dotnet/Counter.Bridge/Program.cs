@@ -50,6 +50,7 @@ builder.Services.AddOrleansRustBridge(options =>
     options.ServiceId = serviceId;
     options.ClusterId = clusterId;
     options.BridgeVersion = "0.1.0";
+    options.PayloadCodecs = ["json", "protobuf"];
 });
 builder.Services.AddSingleton<IBridgeGrainInvoker, CounterGrainInvoker>();
 
