@@ -182,18 +182,30 @@ Structured errors travel in a `bridge-error-bin` gRPC trailer, so the stable
 code survives regardless of the transport status. Exception detail is omitted
 unless `BridgeOptions.IncludeExceptionDetail` is enabled (development only).
 
-## Authentication
+## Transport security and authentication
 
-The client can attach static gRPC metadata to every request so the bridge can
-sit behind a JWT- or API-key-validating proxy:
+Enable the `tls` cargo feature to connect over TLS (custom/self-signed CA,
+mutual TLS, or public webpki roots). The client can also attach static gRPC
+metadata to every request so the bridge can sit behind a JWT- or
+API-key-validating proxy:
 
 ```rust
-let client = OrleansClient::builder("http://127.0.0.1:50051")
+use orleans_rust_client::{OrleansClient, TlsConfig};
+
+let tls = TlsConfig::new()
+    .with_domain_name("bridge.internal")
+    .with_ca_certificate_pem(std::fs::read("ca.pem")?); // omit for public roots
+
+let client = OrleansClient::builder("https://bridge.internal:50051")
+    .tls(tls)
     .bearer_token(std::env::var("ORLEANS_BRIDGE_TOKEN")?)
     .api_key("x-api-key", "…")
     .connect()
     .await?;
 ```
+
+On the bridge, terminate TLS at Kestrel (the sample loads a cert/key PEM pair
+from `BRIDGE_TLS_CERT_PEM` / `BRIDGE_TLS_KEY_PEM`) or at an adjacent proxy.
 
 ## Security notes
 
@@ -207,8 +219,9 @@ production. See [`SECURITY.md`](SECURITY.md).
 - **M1 — health + manifest** ✅ bridge `Health` and `GetManifest`.
 - **M2 — JSON invoke** ✅ `Reset`/`Add`/`Get` end-to-end with stable errors.
 - **M3 — typed clients** ✅ `orleans-rust-codegen` generates typed wrappers.
-- **M4 — hardening** TLS/auth in the client, configurable retries (conservative,
-  opt-in today), broader codegen, more codecs.
+- **M4 — hardening** ✅ client TLS (`tls` feature) + auth metadata hooks,
+  conservative opt-in retries, configurable timeouts and message sizes.
+  Ongoing: broader codegen and more codecs.
 
 ## Non-goals
 

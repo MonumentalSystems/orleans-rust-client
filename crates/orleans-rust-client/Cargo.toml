@@ -17,6 +17,8 @@ default = ["json"]
 json = ["dep:serde", "dep:serde_json"]
 # Opaque protobuf payloads: callers supply already-encoded bytes.
 protobuf = []
+# Transport security for the gRPC channel (custom CA, mTLS, public roots).
+tls = ["tonic/tls", "tonic/tls-webpki-roots"]
 
 [dependencies]
 bytes.workspace = true

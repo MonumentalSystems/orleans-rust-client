@@ -12,7 +12,7 @@ name = "orleans_bridge_integration"
 path = "src/lib.rs"
 
 [dependencies]
-orleans-rust-client.workspace = true
+orleans-rust-client = { workspace = true, features = ["tls"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "process"] }
 anyhow.workspace = true
 serde_json.workspace = true

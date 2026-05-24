@@ -152,6 +152,29 @@ async fn request_context(client: &OrleansClient) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires the .NET SDK and a built sample; run with --ignored"]
+async fn tls_end_to_end() -> anyhow::Result<()> {
+    // The bridge generates a dev CA + server cert and serves HTTPS/HTTP2; the
+    // client trusts the CA and connects over TLS.
+    let cluster = TestCluster::start_tls().await?;
+    assert!(
+        cluster.bridge_url.starts_with("https://"),
+        "expected a TLS endpoint"
+    );
+
+    let client = cluster.client().await?;
+    let health = client.health().await?;
+    assert_eq!(health.status.to_lowercase(), "healthy");
+
+    let counter = client.grain(INTERFACE, GRAIN_TYPE, GrainKey::String("tls".into()));
+    counter.invoke_json::<_, ()>("Reset", &()).await?;
+    let value: i64 = counter.invoke_json("Add", &7_i64).await?;
+    assert_eq!(value, 7);
+    println!("[tls_end_to_end] ok");
+    Ok(())
+}
+
 async fn auth_metadata(cluster: &TestCluster) -> anyhow::Result<()> {
     // Build a client that attaches auth headers to every request. The bridge
     // does not validate them (a proxy would); this confirms the headers are

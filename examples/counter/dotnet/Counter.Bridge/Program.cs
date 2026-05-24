@@ -20,9 +20,20 @@ if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
     builder.WebHost.UseUrls("http://127.0.0.1:50051");
 }
 
+// Optional TLS: an operator-provided cert/key, or a dev self-signed chain.
+var serverCertificate = TlsSetup.LoadOrGenerate();
+
 // gRPC over cleartext (h2c) needs HTTP/2 forced; there is no ALPN negotiation.
+// Over TLS, ALPN negotiates HTTP/2.
 builder.WebHost.ConfigureKestrel(options =>
-    options.ConfigureEndpointDefaults(listen => listen.Protocols = HttpProtocols.Http2));
+    options.ConfigureEndpointDefaults(listen =>
+    {
+        listen.Protocols = HttpProtocols.Http2;
+        if (serverCertificate is not null)
+        {
+            listen.UseHttps(serverCertificate);
+        }
+    }));
 
 builder.Host.UseOrleansClient(client =>
 {
