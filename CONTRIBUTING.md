@@ -20,6 +20,9 @@ starting work that expands this scope.
 
 ## Building and testing
 
+There is no hosted CI; checks run locally. The quickest path is `make check`,
+which runs the whole suite. The individual commands are:
+
 ```sh
 # Rust
 cargo build --workspace
@@ -32,7 +35,7 @@ dotnet build orleans-rust-client.slnx
 dotnet format orleans-rust-client.slnx --verify-no-changes
 
 # End-to-end (requires the .NET SDK; starts a silo + bridge)
-cargo test -p orleans-bridge-integration -- --ignored --nocapture
+cargo test -p orleans-bridge-integration --release -- --ignored --nocapture
 ```
 
 ## Conventions
@@ -47,8 +50,8 @@ cargo test -p orleans-bridge-integration -- --ignored --nocapture
 
 1. Fork and create a topic branch.
 2. Make focused commits with clear messages.
-3. Open a pull request describing the change and its motivation.
-4. Ensure CI is green.
+3. Run `make check` locally and ensure it passes.
+4. Open a pull request describing the change and its motivation.
 
 By contributing, you agree that your contributions are licensed under the
 project's MIT license.

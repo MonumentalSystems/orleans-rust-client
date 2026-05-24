@@ -7,8 +7,6 @@ grains without reimplementing Orleans' internal gateway protocol or
 serialization runtime. The bridge uses the official Orleans `IClusterClient`;
 Rust applications communicate with the bridge over gRPC.
 
-[![CI](https://github.com/MonumentalSystems/orleans-rust-client/actions/workflows/ci.yml/badge.svg)](https://github.com/MonumentalSystems/orleans-rust-client/actions/workflows/ci.yml)
-
 ## What this is
 
 A practical integration layer in two halves:
@@ -86,6 +84,20 @@ cargo run --manifest-path examples/counter/rust/Cargo.toml
 
 See [`examples/counter/README.md`](examples/counter/README.md) for details and
 port configuration.
+
+## Building and verifying
+
+There is no hosted CI; all checks run locally. The `Makefile` wraps the full
+suite:
+
+```sh
+make check         # rustfmt, clippy (-D warnings), tests, dotnet build/format, e2e
+make rust-test     # Rust unit/doc tests only
+make e2e           # end-to-end: starts a silo + bridge, runs the Rust client
+```
+
+Run these before pushing. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
+individual commands.
 
 ## Example: Rust client
 
