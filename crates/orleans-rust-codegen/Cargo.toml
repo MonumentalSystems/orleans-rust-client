@@ -8,8 +8,11 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/orleans-rust-codegen"
 keywords = ["orleans", "codegen", "grpc"]
 categories = ["development-tools"]
+include = ["src/**/*.rs", "README.md"]
 
 [[bin]]
 name = "orleans-rust-codegen"

@@ -15,8 +15,8 @@ starting work that expands this scope.
 - A Rust toolchain (stable, edition 2024 / Rust 1.85+). `rustup` is recommended.
 - The .NET SDK pinned in `global.json` (`protoc` is bundled via `Grpc.Tools`
   for the .NET build).
-- `protoc` on your `PATH` for the Rust build (the `tonic-build` step). On
-  Debian/Ubuntu: `apt-get install -y protobuf-compiler`.
+- `protoc` is **not** required for the Rust build — it is vendored
+  automatically. Set the `PROTOC` env var if you prefer your own.
 
 ## Building and testing
 

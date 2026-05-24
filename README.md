@@ -69,9 +69,9 @@ same file.
 
 ## Quickstart
 
-Prerequisites: a Rust toolchain (edition 2024 / 1.85+), the .NET SDK pinned in
-`global.json`, and `protoc` on your `PATH` for the Rust build
-(`apt-get install -y protobuf-compiler`, `brew install protobuf`, ...).
+Prerequisites: a Rust toolchain (edition 2024 / 1.85+) and the .NET SDK pinned
+in `global.json`. `protoc` is **not** required — the build vendors it
+automatically (set the `PROTOC` env var to use your own).
 
 Run the counter sample in three terminals:
 
@@ -274,9 +274,10 @@ cargo publish -p orleans-rust-codegen
 cargo publish -p orleans-rust-client
 ```
 
-`protoc` must be on `PATH` for the client's build script. The `dotnet/` bridge
-and the `examples/`/`tests/` crates are not published (the example and
-integration crates set `publish = false`). See [`CHANGELOG.md`](CHANGELOG.md).
+No system `protoc` is needed — the client's build script vendors one (works on
+docs.rs and on x86-64/arm64). The `dotnet/` bridge and the `examples/`/`tests/`
+crates are not published (the example and integration crates set
+`publish = false`). See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 
