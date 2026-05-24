@@ -58,4 +58,13 @@ public class BridgeInvocationTests
         var ex = Assert.Throws<BridgeException>(() => Invocation("Adjust", "[1]").DecodeArgument<long>(3));
         Assert.Equal(BridgeErrorCodes.InvalidPayload, ex.Code);
     }
+
+    [Fact]
+    public void MalformedArgumentValueThrowsInvalidPayload()
+    {
+        // A well-formed array whose element cannot deserialize to the target
+        // type exercises the decode catch path.
+        var ex = Assert.Throws<BridgeException>(() => Invocation("Adjust", "[\"not-a-number\"]").DecodeArgument<long>(0));
+        Assert.Equal(BridgeErrorCodes.InvalidPayload, ex.Code);
+    }
 }

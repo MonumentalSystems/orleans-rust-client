@@ -79,6 +79,8 @@ mod tests {
     fn default_is_disabled() {
         assert!(!RetryPolicy::default().is_enabled());
         assert_eq!(RetryPolicy::default().backoff_for(1), Duration::ZERO);
+        // Attempt 0 has no backoff regardless of policy.
+        assert_eq!(RetryPolicy::conservative().backoff_for(0), Duration::ZERO);
     }
 
     #[test]

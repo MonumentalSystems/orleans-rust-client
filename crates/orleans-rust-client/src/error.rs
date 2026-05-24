@@ -217,6 +217,31 @@ mod tests {
     }
 
     #[test]
+    fn display_renders_each_variant() {
+        let bridge = OrleansError::Bridge {
+            code: "orleans_timeout".to_owned(),
+            message: "boom".to_owned(),
+            detail: None,
+            retryable: false,
+        };
+        assert_eq!(bridge.to_string(), "bridge error orleans_timeout: boom");
+
+        let status = OrleansError::Status(tonic::Status::internal("nope"));
+        assert!(status.to_string().starts_with("grpc status"));
+
+        assert!(
+            OrleansError::Serialization("bad".to_owned())
+                .to_string()
+                .contains("serialization error")
+        );
+        assert!(
+            OrleansError::InvalidConfig("x".to_owned())
+                .to_string()
+                .contains("invalid configuration")
+        );
+    }
+
+    #[test]
     fn non_bridge_errors_have_no_code_and_are_not_retryable() {
         let serialization = OrleansError::Serialization("bad".to_owned());
         assert_eq!(serialization.code(), None);

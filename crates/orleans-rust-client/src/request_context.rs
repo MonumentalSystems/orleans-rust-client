@@ -122,4 +122,14 @@ mod tests {
         let map = RequestContext::from_iter([("k", "v")]).into_map();
         assert_eq!(map.get("k"), Some(&"v".to_owned()));
     }
+
+    #[test]
+    fn set_mutates_in_place_and_overwrites() {
+        let mut ctx = RequestContext::new();
+        assert!(ctx.is_empty());
+        ctx.set("a", "1").set("b", "2").set("a", "overwritten");
+        assert_eq!(ctx.len(), 2);
+        assert_eq!(ctx.get("a"), Some("overwritten"));
+        assert_eq!(ctx.get("b"), Some("2"));
+    }
 }

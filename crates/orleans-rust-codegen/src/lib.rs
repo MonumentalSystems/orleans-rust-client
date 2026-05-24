@@ -573,4 +573,92 @@ mod tests {
         ));
         assert!(code.contains("invoke_json_with_context(\"Get\", &())"));
     }
+
+    fn grain_with_keys(kinds: Vec<&str>, methods: Vec<GrainMethod>) -> Manifest {
+        Manifest {
+            service_id: "s".into(),
+            cluster_id: "c".into(),
+            bridge_version: "0.1.0".into(),
+            schema_version: "1".into(),
+            grains: vec![GrainContract {
+                interface_name: "Sample.IThingGrain".into(),
+                grain_type: "thing".into(),
+                supported_key_kinds: kinds.into_iter().map(str::to_owned).collect(),
+                methods,
+            }],
+        }
+    }
+
+    #[test]
+    fn generates_int64_key_constructor() {
+        let code = generate(
+            &grain_with_keys(vec!["int64"], vec![method("Get", "", "System.Int64")]),
+            &CodegenOptions::default(),
+        )
+        .unwrap();
+        assert!(code.contains("pub fn new(client: OrleansClient, key: i64) -> Self"));
+        assert!(code.contains("GrainKey::Int64(key)"));
+    }
+
+    #[test]
+    fn generates_guid_key_constructor() {
+        let code = generate(
+            &grain_with_keys(vec!["guid"], vec![method("Get", "", "System.Int64")]),
+            &CodegenOptions::default(),
+        )
+        .unwrap();
+        assert!(code.contains("pub fn new(client: OrleansClient, key: uuid::Uuid) -> Self"));
+        assert!(code.contains("GrainKey::Guid(key)"));
+    }
+
+    #[test]
+    fn sanitizes_reserved_method_names() {
+        // "Type" -> snake_case "type" (a Rust keyword) -> raw identifier.
+        let code = generate(
+            &grain(vec![method("Type", "", "System.String")]),
+            &CodegenOptions::default(),
+        )
+        .unwrap();
+        assert!(code.contains("pub async fn r#type(&self)"));
+    }
+
+    #[test]
+    fn empty_interface_name_is_an_error() {
+        let mut manifest = grain_with_keys(vec!["string"], vec![method("Get", "", "")]);
+        manifest.grains[0].interface_name = String::new();
+        let err = generate(&manifest, &CodegenOptions::default()).unwrap_err();
+        assert!(matches!(err, CodegenError::Invalid(_)));
+    }
+
+    #[test]
+    fn maps_additional_scalars() {
+        assert_eq!(map_type("System.DateTime"), "String");
+        assert_eq!(map_type("System.Decimal"), "String");
+        assert_eq!(map_type("System.Object"), "serde_json::Value");
+        assert_eq!(map_type("System.Boolean"), "bool");
+        assert_eq!(map_type("System.Guid"), "uuid::Uuid");
+    }
+
+    #[test]
+    fn maps_nullable_reflection_form() {
+        assert_eq!(
+            map_type("System.Nullable`1[[System.Int32, System.Private.CoreLib]]"),
+            "Option<i32>"
+        );
+        assert_eq!(
+            map_type("System.Collections.Generic.IReadOnlyList`1[[System.String, mscorlib]]"),
+            "Vec<String>"
+        );
+    }
+
+    #[test]
+    fn parses_manifest_from_json() {
+        let json = r#"{"service_id":"s","grains":[{"interface_name":"X.IY","grain_type":"y",
+            "supported_key_kinds":["string"],
+            "methods":[{"name":"Get","response_type":"System.Int64"}]}]}"#;
+        let manifest = Manifest::from_json_str(json).unwrap();
+        assert_eq!(manifest.grains.len(), 1);
+        let code = generate(&manifest, &CodegenOptions::default()).unwrap();
+        assert!(code.contains("pub struct YClient"));
+    }
 }

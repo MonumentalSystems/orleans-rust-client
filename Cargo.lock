@@ -660,6 +660,8 @@ dependencies = [
  "protoc-bin-vendored",
  "serde_json",
  "tokio",
+ "tonic",
+ "tonic-build",
  "uuid",
 ]
 
