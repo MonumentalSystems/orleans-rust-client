@@ -171,14 +171,35 @@ impl TestCluster {
 
 impl Drop for TestCluster {
     fn drop(&mut self) {
-        let _ = self.bridge.kill();
-        let _ = self.silo.kill();
-        let _ = self.bridge.wait();
-        let _ = self.silo.wait();
+        // Stop the bridge before the silo, and prefer a graceful shutdown
+        // (SIGTERM) so the hosts run their normal exit path — which also lets
+        // coverage profilers flush. Fall back to SIGKILL if they linger.
+        terminate(&mut self.bridge);
+        terminate(&mut self.silo);
         if let Some(dir) = &self.tls_dir {
             let _ = std::fs::remove_dir_all(dir);
         }
     }
+}
+
+fn terminate(child: &mut Child) {
+    #[cfg(unix)]
+    let _ = Command::new("kill")
+        .arg("-TERM")
+        .arg(child.id().to_string())
+        .status();
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(_) => break,
+        }
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 fn dll(solution_dir: &std::path::Path, project: &str) -> PathBuf {
