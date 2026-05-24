@@ -79,19 +79,12 @@ impl OrleansClient {
     }
 
     async fn build(config: ClientConfig, retry: RetryPolicy) -> Result<Self, OrleansError> {
-        if let Some(TlsConfig { .. }) = config.tls {
-            return Err(OrleansError::InvalidConfig(
-                "TLS support is not implemented in v0; terminate TLS at a proxy \
-                 or restrict the bridge to a trusted network (see SECURITY.md)"
-                    .to_owned(),
-            ));
-        }
-
         let mut endpoint = Endpoint::from_shared(config.endpoint.clone())
             .map_err(|e| OrleansError::InvalidConfig(format!("invalid endpoint: {e}")))?;
         if let Some(connect_timeout) = config.connect_timeout {
             endpoint = endpoint.connect_timeout(connect_timeout);
         }
+        endpoint = configure_tls(endpoint, config.tls.as_ref())?;
 
         let metadata = build_metadata(&config.metadata)?;
 
@@ -339,6 +332,43 @@ impl OrleansClientBuilder {
     pub async fn connect(self) -> Result<OrleansClient, OrleansError> {
         OrleansClient::build(self.config, self.retry).await
     }
+}
+
+// Cold path (runs once at connect time), so returning the large error enum by
+// value is fine.
+#[cfg(feature = "tls")]
+#[allow(clippy::result_large_err)]
+fn configure_tls(endpoint: Endpoint, tls: Option<&TlsConfig>) -> Result<Endpoint, OrleansError> {
+    use tonic::transport::{Certificate, ClientTlsConfig, Identity};
+
+    let Some(tls) = tls else {
+        return Ok(endpoint);
+    };
+
+    let mut tls_config = ClientTlsConfig::new();
+    match &tls.ca_certificate_pem {
+        Some(ca) => tls_config = tls_config.ca_certificate(Certificate::from_pem(ca)),
+        None => tls_config = tls_config.with_webpki_roots(),
+    }
+    if let Some(domain) = &tls.domain_name {
+        tls_config = tls_config.domain_name(domain.clone());
+    }
+    if let Some((certificate, key)) = &tls.client_identity_pem {
+        tls_config = tls_config.identity(Identity::from_pem(certificate, key));
+    }
+
+    endpoint.tls_config(tls_config).map_err(OrleansError::from)
+}
+
+#[cfg(not(feature = "tls"))]
+#[allow(clippy::result_large_err)]
+fn configure_tls(endpoint: Endpoint, tls: Option<&TlsConfig>) -> Result<Endpoint, OrleansError> {
+    if tls.is_some() {
+        return Err(OrleansError::InvalidConfig(
+            "TLS was configured but the `tls` cargo feature is not enabled".to_owned(),
+        ));
+    }
+    Ok(endpoint)
 }
 
 // Cold path (runs once at connect time), so returning the large error enum by
