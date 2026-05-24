@@ -22,6 +22,11 @@ struct Args {
     /// Crate path used to reference the runtime client.
     #[arg(long, default_value = "orleans_rust_client")]
     client_crate: String,
+
+    /// Also generate `<method>_with_context` variants returning the response
+    /// context alongside the value.
+    #[arg(long)]
+    with_response_context: bool,
 }
 
 fn main() -> ExitCode {
@@ -43,6 +48,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let options = CodegenOptions {
         client_crate: args.client_crate,
+        with_response_context: args.with_response_context,
     };
     let code = generate(&manifest, &options)?;
 

@@ -7,7 +7,11 @@ using OrleansRustBridge.Abstractions;
 namespace OrleansRustBridge.Tools;
 
 /// <summary>A grain method discovered by reflection.</summary>
-public sealed record DiscoveredMethod(string Name, Type? RequestType, Type? ReturnType);
+public sealed record DiscoveredMethod(
+    string Name,
+    Type? RequestType,
+    Type? ReturnType,
+    IReadOnlyList<(string Name, Type Type)> Parameters);
 
 /// <summary>A grain interface discovered by reflection.</summary>
 public sealed record DiscoveredGrain(
@@ -59,7 +63,12 @@ public static class GrainReflection
 
     /// <summary>Map a discovered method to a manifest descriptor.</summary>
     public static GrainMethodDescriptor ToDescriptor(DiscoveredMethod method) =>
-        new(method.Name, TypeName(method.RequestType), TypeName(method.ReturnType), "json");
+        new(method.Name, TypeName(method.RequestType), TypeName(method.ReturnType), "json")
+        {
+            Parameters = method.Parameters
+                .Select(p => new MethodParameterDescriptor(p.Name, TypeName(p.Type)))
+                .ToList(),
+        };
 
     /// <summary>The .NET type name used in manifests, or empty for void/none.</summary>
     public static string TypeName(Type? type) => type is null ? string.Empty : type.FullName ?? type.Name;
@@ -119,7 +128,11 @@ public static class GrainReflection
             {
                 var parameters = method.GetParameters();
                 var request = parameters.Length >= 1 ? parameters[0].ParameterType : null;
-                methods.Add(new DiscoveredMethod(method.Name, request, UnwrapTask(method.ReturnType)));
+                var paramList = parameters
+                    .Select(p => (p.Name ?? "arg", p.ParameterType))
+                    .ToList();
+                methods.Add(new DiscoveredMethod(
+                    method.Name, request, UnwrapTask(method.ReturnType), paramList));
             }
         }
 

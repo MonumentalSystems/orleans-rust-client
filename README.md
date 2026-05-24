@@ -230,8 +230,9 @@ production. See [`SECURITY.md`](SECURITY.md).
 - **M2 — JSON invoke** ✅ `Reset`/`Add`/`Get` end-to-end with stable errors.
 - **M3 — typed clients** ✅ `orleans-rust-codegen` generates typed wrappers.
 - **M4 — hardening** ✅ client TLS (`tls` feature) + auth metadata hooks,
-  conservative opt-in retries, configurable timeouts and message sizes.
-  Ongoing: broader codegen and more codecs.
+  conservative opt-in retries, configurable timeouts and message sizes,
+  protobuf codec end-to-end, and broadened codegen (collections/generics,
+  multi-argument methods, response-context accessors).
 
 ## Non-goals
 
