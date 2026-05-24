@@ -103,8 +103,8 @@ make coverage      # Rust + .NET line coverage (unit + e2e)
 
 `make coverage` needs `cargo-llvm-cov` (`cargo install cargo-llvm-cov` +
 `rustup component add llvm-tools-preview`) and `dotnet-coverage`
-(`dotnet tool install --global dotnet-coverage`). It reports ~96% Rust and
-~97% .NET line coverage across unit tests and the live e2e.
+(`dotnet tool install --global dotnet-coverage`). Across unit tests and the
+live e2e it reports ~99% Rust and 100% .NET line coverage.
 
 Run these before pushing. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
 individual commands.
