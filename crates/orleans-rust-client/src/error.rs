@@ -137,3 +137,75 @@ fn decode_bridge_error(status: &tonic::Status) -> Option<pb::BridgeError> {
     let bytes = value.to_bytes().ok()?;
     <pb::BridgeError as prost::Message>::decode(bytes).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use prost::Message as _;
+    use tonic::metadata::MetadataValue;
+
+    use super::*;
+
+    fn status_with_bridge_error(error: &pb::BridgeError) -> tonic::Status {
+        let mut status = tonic::Status::new(tonic::Code::Unimplemented, "boom");
+        let bytes = error.encode_to_vec();
+        status
+            .metadata_mut()
+            .insert_bin(BRIDGE_ERROR_TRAILER, MetadataValue::from_bytes(&bytes));
+        status
+    }
+
+    #[test]
+    fn decodes_structured_trailer() {
+        let bridge = pb::BridgeError {
+            code: codes::UNKNOWN_METHOD.to_owned(),
+            message: "no such method".to_owned(),
+            detail: String::new(),
+            retryable: false,
+        };
+        let error = OrleansError::from_status(status_with_bridge_error(&bridge));
+        assert_eq!(error.code(), Some(codes::UNKNOWN_METHOD));
+        assert!(!error.is_retryable());
+        match error {
+            OrleansError::Bridge {
+                message, detail, ..
+            } => {
+                assert_eq!(message, "no such method");
+                assert_eq!(detail, None);
+            }
+            other => panic!("expected bridge error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn retryable_trailer_is_retryable() {
+        let bridge = pb::BridgeError {
+            code: codes::ORLEANS_REJECTION.to_owned(),
+            message: "rejected".to_owned(),
+            detail: "overloaded".to_owned(),
+            retryable: true,
+        };
+        let error = OrleansError::from_status(status_with_bridge_error(&bridge));
+        assert!(error.is_retryable());
+        assert!(matches!(
+            error,
+            OrleansError::Bridge {
+                detail: Some(_),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn maps_bare_status_codes() {
+        let timeout = OrleansError::from_status(tonic::Status::deadline_exceeded("late"));
+        assert!(matches!(timeout, OrleansError::Timeout));
+
+        let unavailable = OrleansError::from_status(tonic::Status::unavailable("down"));
+        assert_eq!(unavailable.code(), Some(codes::ORLEANS_UNAVAILABLE));
+        assert!(unavailable.is_retryable());
+
+        let other = OrleansError::from_status(tonic::Status::internal("oops"));
+        assert!(matches!(other, OrleansError::Status(_)));
+        assert_eq!(other.code(), None);
+    }
+}

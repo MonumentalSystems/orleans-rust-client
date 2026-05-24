@@ -86,3 +86,40 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builder_and_accessors() {
+        let ctx = RequestContext::new().with("a", "1").with("b", "2");
+        assert_eq!(ctx.len(), 2);
+        assert!(!ctx.is_empty());
+        assert_eq!(ctx.get("a"), Some("1"));
+        assert_eq!(ctx.get("missing"), None);
+    }
+
+    #[test]
+    fn iter_is_key_ordered() {
+        let ctx = RequestContext::new().with("z", "1").with("a", "2");
+        let keys: Vec<&str> = ctx.iter().map(|(k, _)| k).collect();
+        assert_eq!(keys, vec!["a", "z"]);
+    }
+
+    #[test]
+    fn merged_with_overlays_other() {
+        let base = RequestContext::new().with("a", "1").with("b", "1");
+        let over = RequestContext::new().with("b", "2").with("c", "3");
+        let merged = base.merged_with(&over);
+        assert_eq!(merged.get("a"), Some("1"));
+        assert_eq!(merged.get("b"), Some("2"));
+        assert_eq!(merged.get("c"), Some("3"));
+    }
+
+    #[test]
+    fn into_map_preserves_entries() {
+        let map = RequestContext::from_iter([("k", "v")]).into_map();
+        assert_eq!(map.get("k"), Some(&"v".to_owned()));
+    }
+}

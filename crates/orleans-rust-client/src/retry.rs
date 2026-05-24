@@ -70,3 +70,36 @@ impl Default for RetryPolicy {
         Self::disabled()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_is_disabled() {
+        assert!(!RetryPolicy::default().is_enabled());
+        assert_eq!(RetryPolicy::default().backoff_for(1), Duration::ZERO);
+    }
+
+    #[test]
+    fn conservative_is_bounded() {
+        let policy = RetryPolicy::conservative();
+        assert!(policy.is_enabled());
+        assert_eq!(policy.max_retries, 2);
+    }
+
+    #[test]
+    fn backoff_grows_then_caps() {
+        let policy = RetryPolicy {
+            max_retries: 10,
+            initial_backoff: Duration::from_millis(100),
+            max_backoff: Duration::from_millis(500),
+            backoff_multiplier: 2.0,
+        };
+        assert_eq!(policy.backoff_for(1), Duration::from_millis(100));
+        assert_eq!(policy.backoff_for(2), Duration::from_millis(200));
+        assert_eq!(policy.backoff_for(3), Duration::from_millis(400));
+        // 800ms would exceed the 500ms cap.
+        assert_eq!(policy.backoff_for(4), Duration::from_millis(500));
+    }
+}

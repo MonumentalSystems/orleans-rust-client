@@ -91,7 +91,7 @@ There is no hosted CI; all checks run locally. The `Makefile` wraps the full
 suite:
 
 ```sh
-make check         # rustfmt, clippy (-D warnings), tests, dotnet build/format, e2e
+make check         # rustfmt, clippy (-D warnings), rust+dotnet tests, build/format, e2e
 make rust-test     # Rust unit/doc tests only
 make e2e           # end-to-end: starts a silo + bridge, runs the Rust client
 ```

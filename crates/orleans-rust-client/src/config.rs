@@ -56,3 +56,18 @@ impl ClientConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_are_sane() {
+        let config = ClientConfig::new("http://127.0.0.1:50051");
+        assert_eq!(config.endpoint, "http://127.0.0.1:50051");
+        assert_eq!(config.default_timeout, DEFAULT_TIMEOUT);
+        assert!(config.tls.is_none());
+        assert!(config.default_context.is_empty());
+        assert!(config.max_decoding_message_size.is_some());
+    }
+}

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/dotnet/">
     <Project Path="dotnet/OrleansRustBridge.Abstractions/OrleansRustBridge.Abstractions.csproj" />
+    <Project Path="dotnet/OrleansRustBridge.Tests/OrleansRustBridge.Tests.csproj" />
     <Project Path="dotnet/OrleansRustBridge.Tools/OrleansRustBridge.Tools.csproj" />
     <Project Path="dotnet/OrleansRustBridge/OrleansRustBridge.csproj" />
   </Folder>

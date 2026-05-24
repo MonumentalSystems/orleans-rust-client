@@ -33,6 +33,7 @@ cargo test --workspace
 # .NET
 dotnet build orleans-rust-client.slnx
 dotnet format orleans-rust-client.slnx --verify-no-changes
+dotnet test orleans-rust-client.slnx
 
 # End-to-end (requires the .NET SDK; starts a silo + bridge)
 cargo test -p orleans-bridge-integration --release -- --ignored --nocapture

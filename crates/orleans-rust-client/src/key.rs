@@ -75,3 +75,50 @@ impl std::fmt::Display for GrainKey {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conversions_pick_the_right_variant() {
+        assert_eq!(GrainKey::from("k"), GrainKey::String("k".to_owned()));
+        assert_eq!(
+            GrainKey::from("k".to_owned()),
+            GrainKey::String("k".to_owned())
+        );
+        assert_eq!(GrainKey::from(7_i64), GrainKey::Int64(7));
+        let id = Uuid::nil();
+        assert_eq!(GrainKey::from(id), GrainKey::Guid(id));
+    }
+
+    #[test]
+    fn kind_names_are_stable() {
+        assert_eq!(GrainKey::String(String::new()).kind_name(), "string");
+        assert_eq!(GrainKey::Int64(0).kind_name(), "int64");
+        assert_eq!(GrainKey::Guid(Uuid::nil()).kind_name(), "guid");
+    }
+
+    #[test]
+    fn to_proto_maps_each_variant() {
+        assert!(matches!(
+            GrainKey::String("s".into()).to_proto().kind,
+            Some(pb::grain_key::Kind::StringKey(ref s)) if s == "s"
+        ));
+        assert!(matches!(
+            GrainKey::Int64(9).to_proto().kind,
+            Some(pb::grain_key::Kind::Int64Key(9))
+        ));
+        let id = Uuid::from_u128(0x1234);
+        match GrainKey::Guid(id).to_proto().kind {
+            Some(pb::grain_key::Kind::GuidKey(s)) => assert_eq!(s, id.to_string()),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn display_round_trips_value() {
+        assert_eq!(GrainKey::Int64(42).to_string(), "42");
+        assert_eq!(GrainKey::String("abc".into()).to_string(), "abc");
+    }
+}
