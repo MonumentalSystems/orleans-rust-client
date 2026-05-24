@@ -18,8 +18,11 @@ it accordingly.
 - **Use transport security and authentication in production.** Terminate TLS
   (and ideally mTLS) at the bridge or an adjacent proxy, and authenticate
   callers with mTLS, a JWT-validating reverse proxy, or a network policy that
-  only admits trusted clients. The Rust client exposes a `TlsConfig`
-  placeholder; native TLS in the client is a roadmap item (see the README).
+  only admits trusted clients. The Rust client can attach auth headers to every
+  request — `OrleansClient::builder(url).bearer_token(token)` or `.api_key(...)`
+  / `.metadata(...)` — for a proxy to validate. The client also exposes a
+  `TlsConfig` placeholder; native TLS in the client is a roadmap item (see the
+  README).
 - **Co-locate the bridge with the cluster.** Run it inside the same trust
   boundary as the Orleans silos it talks to.
 - **Do not leak internal detail.** `BridgeOptions.IncludeExceptionDetail`

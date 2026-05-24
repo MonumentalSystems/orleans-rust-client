@@ -11,7 +11,7 @@
 //!
 //! 1. `health_works`      4. `unknown_method`   7. `parallel_calls`
 //! 2. `manifest_works`    5. `invalid_payload`  8. `request_context`
-//! 3. `counter_smoke`     6. `timeout`
+//! 3. `counter_smoke`     6. `timeout`          9. `auth_metadata`
 
 use orleans_bridge_integration::TestCluster;
 use orleans_rust_client::{GrainKey, OrleansClient, OrleansError, codes};
@@ -33,6 +33,7 @@ async fn counter_end_to_end() -> anyhow::Result<()> {
     timeout(&client).await?;
     parallel_calls(&client).await?;
     request_context(&client).await?;
+    auth_metadata(&cluster).await?;
 
     Ok(())
 }
@@ -148,5 +149,23 @@ async fn request_context(client: &OrleansClient) -> anyhow::Result<()> {
     let who: String = counter.invoke_json("WhoCalled", &()).await?;
     assert_eq!(who, "rusty");
     println!("[request_context] ok: who={who}");
+    Ok(())
+}
+
+async fn auth_metadata(cluster: &TestCluster) -> anyhow::Result<()> {
+    // Build a client that attaches auth headers to every request. The bridge
+    // does not validate them (a proxy would); this confirms the headers are
+    // valid and transmitted without breaking the call end-to-end.
+    let client = OrleansClient::builder(&cluster.bridge_url)
+        .bearer_token("integration-test-token")
+        .api_key("x-api-key", "abc123")
+        .connect()
+        .await?;
+
+    let counter = client.grain(INTERFACE, GRAIN_TYPE, GrainKey::String("auth".into()));
+    counter.invoke_json::<_, ()>("Reset", &()).await?;
+    let value: i64 = counter.invoke_json("Add", &3_i64).await?;
+    assert_eq!(value, 3);
+    println!("[auth_metadata] ok");
     Ok(())
 }
