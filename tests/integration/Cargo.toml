@@ -1,0 +1,21 @@
+[package]
+name = "orleans-bridge-integration"
+description = "End-to-end integration tests for the Orleans bridge and Rust client."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "orleans_bridge_integration"
+path = "src/lib.rs"
+
+[dependencies]
+orleans-rust-client.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "process"] }
+anyhow.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "process"] }

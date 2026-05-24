@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/dotnet/">
+    <Project Path="dotnet/OrleansRustBridge.Abstractions/OrleansRustBridge.Abstractions.csproj" />
+    <Project Path="dotnet/OrleansRustBridge.Tools/OrleansRustBridge.Tools.csproj" />
+    <Project Path="dotnet/OrleansRustBridge/OrleansRustBridge.csproj" />
+  </Folder>
+  <Folder Name="/examples/" />
+  <Folder Name="/examples/counter/" />
+  <Folder Name="/examples/counter/dotnet/">
+    <Project Path="examples/counter/dotnet/Counter.Abstractions/Counter.Abstractions.csproj" />
+    <Project Path="examples/counter/dotnet/Counter.Bridge/Counter.Bridge.csproj" />
+    <Project Path="examples/counter/dotnet/Counter.Silo/Counter.Silo.csproj" />
+  </Folder>
+</Solution>

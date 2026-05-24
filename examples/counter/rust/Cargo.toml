@@ -1,0 +1,21 @@
+[package]
+name = "counter-example"
+description = "Example Rust client for the Orleans counter sample."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "counter-example"
+path = "src/main.rs"
+
+[dependencies]
+orleans-rust-client.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+anyhow.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+orleans-rust-codegen.workspace = true
