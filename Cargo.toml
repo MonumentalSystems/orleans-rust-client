@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/orleans-rust-client",
+    "crates/orleans-rust-codegen",
+    "tests/integration",
+    "examples/counter/rust",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/MonumentalSystems/orleans-rust-client"
+homepage = "https://github.com/MonumentalSystems/orleans-rust-client"
+authors = ["orleans-rust-client contributors"]
+
+[workspace.dependencies]
+async-trait = "0.1"
+bytes = "1"
+prost = "0.13"
+prost-types = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tonic = "0.12"
+tonic-build = "0.12"
+tracing = "0.1"
+uuid = { version = "1", features = ["serde", "v4"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+heck = "0.5"
+
+# Internal crates
+orleans-rust-client = { path = "crates/orleans-rust-client", version = "0.1.0" }
+orleans-rust-codegen = { path = "crates/orleans-rust-codegen", version = "0.1.0" }
+
+[profile.release]
+lto = "thin"

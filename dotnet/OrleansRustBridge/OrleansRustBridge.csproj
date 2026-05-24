@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>OrleansRustBridge</RootNamespace>
+    <AssemblyName>OrleansRustBridge</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Grpc.AspNetCore" Version="$(GrpcAspNetCoreVersion)" />
+    <PackageReference Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\..\proto\orleans_bridge.proto" GrpcServices="Server" ProtoRoot="..\..\proto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrleansRustBridge.Abstractions\OrleansRustBridge.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OrleansRustBridge.Tools</RootNamespace>
+    <AssemblyName>orleans-rust-bridge-tools</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Orleans.Core.Abstractions" Version="$(OrleansVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrleansRustBridge.Abstractions\OrleansRustBridge.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

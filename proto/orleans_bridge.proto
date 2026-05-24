@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package orleans.bridge.v1;
+
+option csharp_namespace = "Orleans.Bridge.V1";
+
+// OrleansBridge is a language-neutral gRPC facade in front of an Orleans
+// cluster. It is intentionally generic: it carries opaque, codec-tagged
+// payloads and never exposes Orleans' internal wire protocol or
+// serialization runtime. See the repository README for the design rationale
+// and explicit non-goals.
+service OrleansBridge {
+  // Health reports bridge and cluster identity so clients can verify they are
+  // talking to the expected service before issuing calls.
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // Invoke dispatches a single grain method call.
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+
+  // GetManifest returns the set of grain contracts the bridge can dispatch to.
+  rpc GetManifest(GetManifestRequest) returns (GetManifestResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string service_id = 2;
+  string cluster_id = 3;
+  string bridge_version = 4;
+  string orleans_version = 5;
+}
+
+message GetManifestRequest {}
+
+message GetManifestResponse {
+  ContractManifest manifest = 1;
+}
+
+message ContractManifest {
+  string service_id = 1;
+  string cluster_id = 2;
+  string bridge_version = 3;
+  string schema_version = 4;
+  repeated GrainContract grains = 5;
+}
+
+message GrainContract {
+  string interface_name = 1;
+  string grain_type = 2;
+  repeated GrainMethod methods = 3;
+  repeated string supported_key_kinds = 4;
+}
+
+message GrainMethod {
+  string name = 1;
+  string request_type = 2;
+  string response_type = 3;
+  string payload_codec = 4;
+}
+
+message InvokeRequest {
+  GrainTarget target = 1;
+  string method = 2;
+  bytes payload = 3;
+  string payload_codec = 4;
+  map<string, string> request_context = 5;
+  uint32 timeout_ms = 6;
+}
+
+message GrainTarget {
+  string interface_name = 1;
+  string grain_type = 2;
+  GrainKey key = 3;
+}
+
+message GrainKey {
+  oneof kind {
+    string string_key = 1;
+    int64 int64_key = 2;
+    string guid_key = 3;
+  }
+}
+
+message InvokeResponse {
+  bytes payload = 1;
+  string payload_codec = 2;
+  map<string, string> response_context = 3;
+}
+
+// BridgeError carries Orleans-level (application/runtime) error information.
+// Transport-level failures use gRPC status codes; structured Orleans errors
+// are returned with a non-OK status and this message encoded in the
+// `bridge-error-bin` response trailer so clients recover a stable error code.
+message BridgeError {
+  string code = 1;
+  string message = 2;
+  string detail = 3;
+  bool retryable = 4;
+}

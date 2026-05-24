@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Counter.Bridge</RootNamespace>
+    <AssemblyName>Counter.Bridge</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\dotnet\OrleansRustBridge\OrleansRustBridge.csproj" />
+    <ProjectReference Include="..\Counter.Abstractions\Counter.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

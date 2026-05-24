@@ -1,0 +1,23 @@
+<Project>
+
+  <!-- Shared MSBuild properties for every .NET project in the repository. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+
+    <!-- Pinned package versions; see README "Supported Orleans versions". -->
+    <OrleansVersion>10.1.0</OrleansVersion>
+    <GrpcAspNetCoreVersion>2.80.0</GrpcAspNetCoreVersion>
+    <GrpcToolsVersion>2.80.0</GrpcToolsVersion>
+    <GrpcNetClientVersion>2.80.0</GrpcNetClientVersion>
+    <GoogleProtobufVersion>3.35.0</GoogleProtobufVersion>
+  </PropertyGroup>
+
+</Project>
