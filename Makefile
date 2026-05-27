@@ -4,7 +4,7 @@ COVERAGE_DIR := target/coverage
 # Excludes generated proto, build scripts, the CLI shim, and test code.
 RUST_COV_IGNORE := (/target/|build\.rs|/tests/|src/main\.rs|generated\.rs)
 
-.PHONY: all check rust-fmt rust-clippy rust-test rust-build dotnet-build dotnet-format dotnet-test e2e \
+.PHONY: all check proto rust-fmt rust-clippy rust-test rust-build dotnet-build dotnet-format dotnet-test e2e \
         coverage coverage-rust coverage-dotnet clean help
 
 all: check
@@ -12,6 +12,7 @@ all: check
 help:
 	@echo "Targets:"
 	@echo "  check         Full local suite: fmt, clippy, tests, dotnet build/format, e2e"
+	@echo "  proto         Regenerate the committed C# protobuf/gRPC sources"
 	@echo "  rust-build    Build the Rust workspace"
 	@echo "  rust-fmt      Check Rust formatting"
 	@echo "  rust-clippy   Lint Rust with warnings denied"
@@ -27,6 +28,15 @@ help:
 
 # Full local verification. There is no hosted CI; run this before pushing.
 check: rust-fmt rust-clippy rust-test dotnet-format dotnet-build dotnet-test e2e
+
+# Regenerate the committed C# protobuf/gRPC sources by running protoc directly
+# (see scripts/gen-proto.sh). Run this after editing any .proto, then commit the
+# result. The .NET build itself does NOT invoke protoc; the bundled Grpc.Tools
+# protoc segfaults under MSBuild on arm64, so codegen lives here instead.
+# `dotnet restore` ensures the Grpc.Tools package (which carries protoc) exists.
+proto:
+	dotnet restore $(DOTNET_SLN)
+	scripts/gen-proto.sh
 
 rust-build:
 	cargo build --workspace

@@ -6,6 +6,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **.NET protobuf/gRPC codegen** now runs `protoc` directly (via
+  `scripts/gen-proto.sh` / `make proto`) and the generated C# sources are
+  committed under each project's `Generated/` directory, instead of being
+  produced by the `Grpc.Tools` MSBuild integration. The bundled arm64 `protoc`
+  segfaults (`exit 139`) when MSBuild spawns it, breaking `dotnet build` on
+  arm64 hosts; the same binary runs cleanly from a shell. The `.csproj`s drop
+  their `<Protobuf>` items (and the now-unused `Grpc.Tools` reference in the
+  counter example) while keeping the `Grpc.AspNetCore` / `Google.Protobuf`
+  runtime packages. A plain `dotnet build` now needs no `protoc`; both arm64 and
+  amd64 use the same codegen path.
+
 ## [0.1.0]
 
 Initial release.

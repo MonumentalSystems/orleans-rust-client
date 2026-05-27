@@ -64,14 +64,20 @@ tests/integration/          End-to-end integration tests.
 ```
 
 The gRPC contract lives inside the client crate (`crates/orleans-rust-client/proto/`)
-so the crate is self-contained and publishable; the .NET bridge references the
-same file.
+so the crate is self-contained and publishable; the .NET bridge generates from
+the same file. The bridge's C# protobuf/gRPC sources are generated out-of-band
+(`make proto`, see below) and committed under each project's `Generated/`
+directory rather than produced by the `Grpc.Tools` MSBuild integration, so
+`dotnet build` needs no `protoc`. Regenerate them with `make proto` after
+editing any `.proto`; see [`CONTRIBUTING.md`](CONTRIBUTING.md) for why (the
+bundled `protoc` segfaults under MSBuild on arm64).
 
 ## Quickstart
 
 Prerequisites: a Rust toolchain (edition 2024 / 1.85+) and the .NET SDK pinned
-in `global.json`. `protoc` is **not** required — the build vendors it
-automatically (set the `PROTOC` env var to use your own).
+in `global.json`. `protoc` is **not** required — the Rust build vendors it
+automatically (set the `PROTOC` env var to use your own), and the .NET build
+compiles committed, pre-generated protobuf sources.
 
 Run the counter sample in three terminals:
 

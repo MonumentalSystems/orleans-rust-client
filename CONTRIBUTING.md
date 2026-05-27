@@ -13,10 +13,31 @@ starting work that expands this scope.
 ## Prerequisites
 
 - A Rust toolchain (stable, edition 2024 / Rust 1.85+). `rustup` is recommended.
-- The .NET SDK pinned in `global.json` (`protoc` is bundled via `Grpc.Tools`
-  for the .NET build).
-- `protoc` is **not** required for the Rust build — it is vendored
-  automatically. Set the `PROTOC` env var if you prefer your own.
+- The .NET SDK pinned in `global.json`.
+- `protoc` is **not** required for either build. The Rust build vendors its own
+  (set the `PROTOC` env var to use yours). The .NET build compiles
+  **pre-generated** C# protobuf/gRPC sources (committed under each project's
+  `Generated/` directory), so it needs no `protoc` either.
+
+## Regenerating the protobuf sources
+
+The C# protobuf/gRPC sources are generated out-of-band by `scripts/gen-proto.sh`
+(or `make proto`) and committed — they are **not** produced by the `Grpc.Tools`
+MSBuild integration. This is deliberate: on arm64 the `protoc` that `Grpc.Tools`
+bundles segfaults when MSBuild spawns it, whereas invoking `protoc` directly
+from a shell works on every architecture, so codegen lives in one consistent
+shell step.
+
+After editing any `.proto`, regenerate and commit the result:
+
+```sh
+make proto                       # or: scripts/gen-proto.sh
+git add dotnet/**/Generated examples/**/Generated
+```
+
+`make proto` restores the solution first (the `Grpc.Tools` package carries the
+`protoc` the script runs); set `GRPC_TOOLS_DIR` to point the script at a
+different copy.
 
 ## Building and testing
 

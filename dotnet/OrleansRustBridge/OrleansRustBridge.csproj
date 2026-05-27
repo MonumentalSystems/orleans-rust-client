@@ -11,9 +11,16 @@
     <PackageReference Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Protobuf Include="..\..\crates\orleans-rust-client\proto\orleans_bridge.proto" GrpcServices="Server" ProtoRoot="..\..\crates\orleans-rust-client\proto" />
-  </ItemGroup>
+  <!--
+    The C# protobuf/gRPC sources live in Generated/ and are picked up by the
+    SDK's default Compile glob. They are produced out-of-band by
+    scripts/gen-proto.sh (run `make proto`) and committed, rather than through
+    the Grpc.Tools MSBuild integration: the protoc that Grpc.Tools bundles
+    segfaults when MSBuild spawns it on arm64, while invoking protoc directly
+    from a shell works on both architectures. The Grpc.AspNetCore runtime
+    package above still provides the gRPC server types the generated code
+    compiles against.
+  -->
 
   <ItemGroup>
     <ProjectReference Include="..\OrleansRustBridge.Abstractions\OrleansRustBridge.Abstractions.csproj" />
