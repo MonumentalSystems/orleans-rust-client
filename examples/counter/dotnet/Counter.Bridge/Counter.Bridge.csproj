@@ -8,12 +8,16 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
     <PackageReference Include="Google.Protobuf" Version="$(GoogleProtobufVersion)" />
-    <PackageReference Include="Grpc.Tools" Version="$(GrpcToolsVersion)" PrivateAssets="All" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Protobuf Include="..\..\proto\counter_messages.proto" GrpcServices="None" ProtoRoot="..\..\proto" />
-  </ItemGroup>
+  <!--
+    The C# protobuf sources live in Generated/ and are picked up by the SDK's
+    default Compile glob. They are produced out-of-band by scripts/gen-proto.sh
+    (run `make proto`) and committed, rather than through the Grpc.Tools MSBuild
+    integration; the bundled protoc segfaults when MSBuild spawns it on arm64.
+    Google.Protobuf above is the runtime the generated code compiles against;
+    Grpc.Tools is no longer needed here.
+  -->
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\dotnet\OrleansRustBridge\OrleansRustBridge.csproj" />
