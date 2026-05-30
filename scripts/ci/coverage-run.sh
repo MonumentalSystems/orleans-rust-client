@@ -83,9 +83,15 @@ TOTAL_CAP    = 24 * 1024 * 1024     # 24 MiB total packed sources
 files = []   # merged [{filename, summary, segments}]
 
 # --- Rust half: already in the right shape -----------------------------------
+# Stamp each file with language="rust" so the merged report can drive the
+# /coverage combined↔separate toggle. Tagging at the SOURCE (here for Rust, in
+# the cobertura adapter for C#) is reliable; path/extension inference is not.
 try:
     rust = json.load(open(rust_report))
-    files.extend(rust.get("data", [{}])[0].get("files", []))
+    rust_files = rust.get("data", [{}])[0].get("files", [])
+    for f in rust_files:
+        f["language"] = "rust"
+    files.extend(rust_files)
 except (OSError, ValueError, IndexError) as e:
     print(f"::warning::could not load rust report: {e}", file=sys.stderr)
 
@@ -148,6 +154,7 @@ def adapt_cobertura(path):
         lpct = (lcov / lc * 100) if lc else 0.0
         out.append({
             "filename": abs_fn,
+            "language": "csharp",
             "summary": {
                 "lines":     {"count": lc, "covered": lcov, "percent": lpct},
                 "regions":   {"count": lc, "covered": lcov, "percent": lpct},
@@ -172,7 +179,25 @@ tot = {k: {"count": sum(s(f, k, "count") for f in files),
 for k, v in tot.items():
     v["percent"] = (v["covered"] / v["count"] * 100) if v["count"] else 0.0
 
-json.dump({"data": [{"files": files, "totals": tot}]}, open(report_out, "w"))
+# Per-language line rollup for the /coverage combined↔separate toggle. Emitted
+# ONLY when >1 language is present, so single-language repos produce a report
+# byte-identical to before (no by_language key). Each entry sums that language's
+# files; the combined % is sum(covered)/sum(total), never a mean of percentages.
+by_lang = {}
+for f in files:
+    lang = f.get("language") or "unknown"
+    acc = by_lang.setdefault(lang, {"count": 0, "covered": 0})
+    acc["count"]   += s(f, "lines", "count")
+    acc["covered"] += s(f, "lines", "covered")
+data0 = {"files": files, "totals": tot}
+if len(by_lang) > 1:
+    data0["by_language"] = {
+        lang: {"count": a["count"], "covered": a["covered"],
+               "percent": (a["covered"] / a["count"] * 100) if a["count"] else 0.0}
+        for lang, a in sorted(by_lang.items())
+    }
+
+json.dump({"data": [data0]}, open(report_out, "w"))
 
 # --- Pack source files for the drilldown -------------------------------------
 sources, packed_total = {}, 0
