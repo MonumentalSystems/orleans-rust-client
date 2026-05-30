@@ -2,10 +2,11 @@
 # gnostr-cloud instance. Manual trigger only.
 #
 # orleans-rust-client is dual-language (Rust client + .NET Orleans bridge), so
-# this runs on the .NET-extended runner image — which also carries the Rust
-# toolchain + cargo-llvm-cov — and measures BOTH halves, merging them into one
-# combined coverage % + a single /coverage drilldown. All the real logic lives
-# in scripts/ci/coverage-run.sh (wrkflw mangles complex inline run: scripts).
+# this runs on the UNIFIED gnostr-cloud-workflow-runner image — Rust toolchain
+# + cargo-llvm-cov AND the .NET 10 SDK in one — and measures BOTH halves,
+# merging them into one combined coverage % + a single /coverage drilldown. All
+# the real logic lives in scripts/ci/coverage-run.sh (wrkflw mangles complex
+# inline run: scripts).
 #
 # Trigger:
 #   NOSTR_PRIVATE_KEY=$(tr -d '\n' < /home/ms/info-at-monumental.systems.hex) \
@@ -22,7 +23,7 @@ jobs:
   coverage:
     runs-on: dgx-00
     container:
-      image: gnostr-cloud-workflow-runner-dotnet:latest
+      image: 192.168.1.187:30500/gnostr-cloud-workflow-runner:latest
       # Persist sccache + cargo's registry/git cache across job containers so
       # the Rust half doesn't recompile the world every run. The image already
       # exports RUSTC_WRAPPER=sccache, CARGO_HOME=/cache/cargo,
