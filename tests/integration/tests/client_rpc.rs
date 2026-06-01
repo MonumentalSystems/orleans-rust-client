@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use orleans_rust_client::{GrainKey, OrleansClient, RequestContext, RetryPolicy};
+use orleans_rust_client::{ClientConfig, GrainKey, OrleansClient, RequestContext, RetryPolicy};
 use tonic::{Request, Response, Status};
 
 #[allow(clippy::all, dead_code)]
@@ -160,6 +160,30 @@ async fn invoke_json_round_trip_succeeds() -> anyhow::Result<()> {
         .await?;
     assert_eq!(echoed, 7);
     assert_eq!(ctx.get("server").map(String::as_str), Some("ok"));
+
+    handle.abort();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connect_and_from_config_use_the_non_builder_path() -> anyhow::Result<()> {
+    // The builder tests above all reach `build` via `OrleansClientBuilder::connect`.
+    // These two entry points are the only callers of `OrleansClient::connect` and
+    // `OrleansClient::from_config`, so exercise them directly.
+    let (url, handle) = spawn_mock()?;
+
+    // Retry the connect() convenience entry point until the server is up.
+    let client = loop {
+        match OrleansClient::connect(&url).await {
+            Ok(client) => break client,
+            Err(_) => tokio::time::sleep(Duration::from_millis(50)).await,
+        }
+    };
+    assert_eq!(client.health().await?.status, "healthy");
+
+    // from_config() with an explicit ClientConfig.
+    let from_config = OrleansClient::from_config(ClientConfig::new(&url)).await?;
+    assert_eq!(from_config.health().await?.status, "healthy");
 
     handle.abort();
     Ok(())
