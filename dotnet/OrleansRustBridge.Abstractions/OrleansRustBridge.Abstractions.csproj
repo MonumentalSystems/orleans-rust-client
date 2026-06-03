@@ -6,7 +6,12 @@
     <IsPackable>true</IsPackable>
     <PackageId>OrleansRustBridge.Abstractions</PackageId>
     <Description>Language-neutral grain abstractions and shared types for the OrleansRustBridge — the contract layer between the .NET Orleans bridge and Rust gRPC clients.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Orleans.Core" Version="$(OrleansVersion)" />

@@ -6,7 +6,12 @@
     <IsPackable>true</IsPackable>
     <PackageId>OrleansRustBridge</PackageId>
     <Description>The reusable .NET bridge that hosts the official Orleans IClusterClient and exposes a language-neutral gRPC surface (orleans.bridge.v1) for Rust (and other) clients.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
