@@ -7,11 +7,19 @@
 # on the server ref-poll watch list, so a push to master OR a v* tag auto-runs
 # this pipeline (no manual `ci enqueue`).
 #
-# Scope: VALIDATE (rust fmt/clippy/test + .NET build/format/test via the repo
-# Makefile). NuGet packaging of the OrleansRustBridge nupkg (which must bundle
-# the Rust cdylib as a per-RID native runtime asset) is a follow-up `pack`/
-# `publish` stage — the native-asset packaging ("platform stuff") needs the
-# bridge csproj wired for runtimes/<rid>/native first.
+# Scope: VALIDATE (rust fmt/clippy/test + .NET build/format/test) -> PACK
+# (`dotnet pack` the publishable bridge libs) -> PUBLISH (push the .nupkg to the
+# uranus feed + nuget.org, tag-only).
+#
+# NOTE on packaging: the bridge is gRPC end-to-end (the .NET OrleansRustBridge
+# is a gRPC server hosting Orleans' IClusterClient; the Rust crate is a pure
+# tonic gRPC client) — so there is NO native cdylib / per-RID asset to bundle.
+# The publishable artifacts are the managed .NET libs: OrleansRustBridge.Abstractions
+# (the contract) and OrleansRustBridge (the host). They opt into packing via
+# <IsPackable>true</IsPackable>; version comes from the repo-root VERSION file
+# (Directory.Build.props), the in-sandbox source of truth. The Rust crates
+# (orleans-rust-client / -codegen) publish to the gnostr-cloud /crates registry
+# separately.
 #
 # ariel's real $HOME isn't writable in the gVisor sandbox, so every job points
 # HOME / SDK home / cargo home / nuget cache at /tmp (the pattern the coverage
@@ -19,6 +27,8 @@
 
 stages:
   - validate
+  - pack
+  - publish
 
 variables:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -71,3 +81,74 @@ jobs:
         make dotnet-build
         make dotnet-format
         make dotnet-test
+
+  pack:
+    stage: pack
+    runs-on: ariel
+    needs: [dotnet]
+    rules:
+      branches:
+        - master
+      tags:
+        - v*
+    script:
+      - |
+        set -e
+        export HOME=/tmp CARGO_HOME=/tmp/cargo DOTNET_CLI_HOME=/tmp \
+               NUGET_PACKAGES=/tmp/nuget DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 \
+               DOTNET_ROOT=/usr/local/dotnet \
+               PATH="/usr/local/dotnet:/tmp/cargo/bin:/usr/local/bin:$PATH"
+        # Generate the gRPC sources (separate pod = fresh checkout), then pack the
+        # publishable libs (IsPackable=true: Abstractions + Bridge). Version comes
+        # from the VERSION file via Directory.Build.props. Proves packaging on
+        # every push without publishing.
+        make proto
+        dotnet pack orleans-rust-client.slnx -c Release -o ./artifacts
+        ls -la ./artifacts
+
+  publish:
+    stage: publish
+    runs-on: ariel
+    needs: [pack]
+    # TAG-ONLY: no `branches:` key, so this is part of the pipeline only on a
+    # `v*` tag push. The auto-poller (repo is watch-listed) enqueues it at the
+    # tagged commit; the committed VERSION file is the version source.
+    rules:
+      tags:
+        - v*
+    script:
+      - |
+        set -e
+        export HOME=/tmp CARGO_HOME=/tmp/cargo DOTNET_CLI_HOME=/tmp \
+               NUGET_PACKAGES=/tmp/nuget DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 \
+               DOTNET_ROOT=/usr/local/dotnet \
+               PATH="/usr/local/dotnet:/tmp/cargo/bin:/usr/local/bin:$PATH"
+        VERSION=$(tr -d '[:space:]' < VERSION 2>/dev/null || true)
+        case "$VERSION" in
+          [0-9]*.[0-9]*.[0-9]*) : ;;
+          *) echo "::error::VERSION file missing or not semver (got '${VERSION:-<empty>}')" >&2; exit 1 ;;
+        esac
+        echo "publishing OrleansRustBridge* $VERSION"
+        make proto
+        dotnet pack orleans-rust-client.slnx -c Release -p:Version="$VERSION" -o ./artifacts
+        ls -la ./artifacts
+
+        # Self-hosted uranus feed = "our nuget repository" (the gate). Token is a
+        # kind:24242 nuget-push capability stored NIP-44-encrypted to ariel.
+        if [ -n "${GNOSTR_CLOUD_NUGET_TOKEN:-}" ]; then
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source "https://uranus.gnostr.cloud/nuget/v3/index.json" \
+            --api-key "$GNOSTR_CLOUD_NUGET_TOKEN" --skip-duplicate
+        else
+          echo "::error::GNOSTR_CLOUD_NUGET_TOKEN not set for this runner — cannot publish to the uranus feed" >&2
+          exit 1
+        fi
+
+        # Mirror to public nuget.org only when a key is present (soft).
+        if [ -n "${NUGET_API_KEY:-}" ]; then
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "$NUGET_API_KEY" --skip-duplicate
+        else
+          echo "NUGET_API_KEY not set for this runner — skipping nuget.org publish"
+        fi
