@@ -1,0 +1,73 @@
+# Main CI pipeline for orleans-rust-client (Rust + .NET bridge) on gnostr-cloud
+# (uranus). Native first-party (GitLab-style) schema parsed by the native CI
+# executor (gnostr-cloud/src/ci/native.rs). Jobs run on the in-cluster `ariel`
+# gVisor runner (unified image: Rust toolchain + .NET 10 SDK + kubectl).
+#
+# Mirrors hyades / mcp / gc-uranus, adapted to this repo's Makefile. The repo is
+# on the server ref-poll watch list, so a push to master OR a v* tag auto-runs
+# this pipeline (no manual `ci enqueue`).
+#
+# Scope: VALIDATE (rust fmt/clippy/test + .NET build/format/test via the repo
+# Makefile). NuGet packaging of the OrleansRustBridge nupkg (which must bundle
+# the Rust cdylib as a per-RID native runtime asset) is a follow-up `pack`/
+# `publish` stage — the native-asset packaging ("platform stuff") needs the
+# bridge csproj wired for runtimes/<rid>/native first.
+#
+# ariel's real $HOME isn't writable in the gVisor sandbox, so every job points
+# HOME / SDK home / cargo home / nuget cache at /tmp (the pattern the coverage
+# + hyades pipelines prove works).
+
+stages:
+  - validate
+
+variables:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  rust:
+    stage: validate
+    runs-on: ariel
+    rules:
+      branches:
+        - master
+      tags:
+        - v*
+    script:
+      - |
+        set -e
+        export HOME=/tmp CARGO_HOME=/tmp/cargo DOTNET_CLI_HOME=/tmp \
+               NUGET_PACKAGES=/tmp/nuget DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 \
+               DOTNET_ROOT=/usr/local/dotnet \
+               PATH="/usr/local/dotnet:/tmp/cargo/bin:/usr/local/bin:$PATH"
+        rustc --version; cargo --version
+        # The Rust analogue of the gc-uranus lint gate: fmt --check + clippy
+        # -D warnings + the workspace test suite.
+        make rust-fmt
+        make rust-clippy
+        make rust-test
+
+  dotnet:
+    stage: validate
+    runs-on: ariel
+    needs: [rust]
+    rules:
+      branches:
+        - master
+      tags:
+        - v*
+    script:
+      - |
+        set -e
+        export HOME=/tmp CARGO_HOME=/tmp/cargo DOTNET_CLI_HOME=/tmp \
+               NUGET_PACKAGES=/tmp/nuget DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 \
+               DOTNET_ROOT=/usr/local/dotnet \
+               PATH="/usr/local/dotnet:/tmp/cargo/bin:/usr/local/bin:$PATH"
+        dotnet --version
+        # proto = `dotnet restore` + scripts/gen-proto.sh (runs protoc directly;
+        # works around the arm64 Grpc.Tools protoc segfault). Generates the C#
+        # gRPC sources the .NET projects need before build.
+        make proto
+        make dotnet-build
+        make dotnet-format
+        make dotnet-test
