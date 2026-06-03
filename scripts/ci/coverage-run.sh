@@ -223,6 +223,10 @@ print(f"::notice::{msg}", file=sys.stderr)
 with open(markers, "a") as m:
     m.write(f"##gnostr-cloud-coverage:{pct:.2f}##\n")
     m.write(f"##gnostr-cloud-coverage-adapter:{msg}##\n")
+# Emit the wall-badge marker to STDOUT too — the runner scans stdout for
+# ##gnostr-cloud-coverage:NN## (the markers FILE alone was NOT picked up, so the
+# wall % stayed empty despite a clean 98.49% run). Mirrors hyades/gnostr-cloud.
+print(f"##gnostr-cloud-coverage:{pct:.2f}##")
 print(f"COMBINED LINE COVERAGE: {pct:.2f}%")
 PY
 
