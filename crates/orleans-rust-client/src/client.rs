@@ -478,8 +478,8 @@ mod tests {
         #[test]
         fn client_identity_arm() {
             let key_pem: &[u8] = b"-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgY3Z0ZXN0a2V5MDAw\nMDAwMDAwMDAwMDAwMDAwMDAwMDChRANCAAS6r9ENKe6t6e8vXdHdGfUN7+ZdLEN4\nytKNqoNlapMBZNHdGfUN7+ZdLEN4ytKNqoNlapMBZNHdGfUN7+ZdLEN4ytK\n-----END PRIVATE KEY-----\n";
-            let tls = TlsConfig::new()
-                .with_client_identity_pem(TEST_CERT_PEM.to_vec(), key_pem.to_vec());
+            let tls =
+                TlsConfig::new().with_client_identity_pem(TEST_CERT_PEM.to_vec(), key_pem.to_vec());
             // Constructing the Identity + applying the config executes lines
             // 356-360 regardless of whether the bytes ultimately verify.
             let _ = configure_tls(endpoint(), Some(&tls));
