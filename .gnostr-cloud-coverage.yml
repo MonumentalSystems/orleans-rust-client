@@ -1,41 +1,51 @@
-# Manual code-coverage workflow for orleans-rust-client on the uranus
-# gnostr-cloud instance. Manual trigger only.
+# Code-coverage workflow for orleans-rust-client on gnostr-cloud (uranus).
+# Native first-party (GitLab-style) schema — top-level `stages` + `jobs`, NO
+# GitHub-Actions `name:`/`on:`/`steps:`/`container:` keys (the native executor
+# rejects those: "unknown field `name`"). Runs IN the `ariel` gVisor ci-runner
+# pod, which ships the unified toolchain (Rust + cargo-llvm-cov AND the .NET 10
+# SDK), so there is no `container:` image to pull — the retired
+# gnostr-cloud-workflow-runner image is gone (wrkflw-removal).
 #
-# orleans-rust-client is dual-language (Rust client + .NET Orleans bridge), so
-# this runs on the UNIFIED gnostr-cloud-workflow-runner image — Rust toolchain
-# + cargo-llvm-cov AND the .NET 10 SDK in one — and measures BOTH halves,
-# merging them into one combined coverage % + a single /coverage drilldown. All
-# the real logic lives in scripts/ci/coverage-run.sh (wrkflw mangles complex
-# inline run: scripts).
+# orleans-rust-client is dual-language (Rust tonic client + .NET Orleans
+# bridge). All the real logic lives in scripts/ci/coverage-run.sh, which:
+#   * Rust  — `cargo llvm-cov` over the workspace (incl. ignored e2e tests),
+#   * .NET  — `dotnet test` + coverlet → cobertura (sources committed under
+#             Generated/, so no protoc needed at coverage time),
+#   * merges both halves into ONE combined % + a single cov-report.json,
+#   * emits the `##gnostr-cloud-coverage:NN.NN##` wall-badge marker on stdout, and
+#   * POSTs the merged report + packed sources to /api/ci/coverage/upload for
+#     the per-file /coverage drilldown.
+# The script sets its own writable HOME=/tmp etc.; ariel forwards the coverage
+# CAS host + per-job upload token via the env allow-list.
 #
-# Trigger:
+# Manual-trigger only — `.gnostr-cloud-coverage.yml` is ignored by the
+# auto-poller (which only discovers `.gnostr-cloud-ci.yml`), so trigger with:
 #   NOSTR_PRIVATE_KEY=$(tr -d '\n' < /home/ms/info-at-monumental.systems.hex) \
 #     gnostr-cloud-cli ci enqueue \
 #       a684e920e475ae9535a26256a3fccf0f0e67650156ea6542bc0baab983e7c1ca/orleans-rust-client \
-#       --workflow .gnostr-cloud-coverage.yml --runs-on dgx-00 \
+#       --workflow .gnostr-cloud-coverage.yml --runs-on ariel \
 #       --host d0b51eaeb289cda95c969f9a70ee76c15c4fa084a055037919beef5613ef1caf
-name: coverage
 
-on:
-  workflow_dispatch:
+stages:
+  - coverage
+
+variables:
+  CARGO_TERM_COLOR: always
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
 
 jobs:
   coverage:
-    runs-on: dgx-00
-    container:
-      image: 192.168.1.187:30500/gnostr-cloud-workflow-runner:latest
-      # Persist sccache + cargo's registry/git cache across job containers so
-      # the Rust half doesn't recompile the world every run. The image already
-      # exports RUSTC_WRAPPER=sccache, CARGO_HOME=/cache/cargo,
-      # SCCACHE_DIR=/cache/sccache. CARGO_TARGET_DIR (/cache/target) is left
-      # unmounted on purpose: `cargo llvm-cov clean` wipes it each run anyway,
-      # so sccache (per-rustc-call) is where the win is.
-      volumes:
-        - /home/ms/.gnostr-cloud/ci-cache/sccache:/cache/sccache
-        - /home/ms/.gnostr-cloud/ci-cache/cargo:/cache/cargo
-    timeout-minutes: 60
-    steps:
-      - name: rust + .NET coverage, emit marker, upload drilldown
-        run: |
-          WS="${GITHUB_WORKSPACE}"; [ -d "$WS" ] || WS=/github/workspace; cd "$WS"
-          bash scripts/ci/coverage-run.sh
+    stage: coverage
+    runs-on: ariel
+    script:
+      # ariel runs the step as bash with cwd = the materialized repo root but
+      # does NOT set GITHUB_WORKSPACE — coverage-run.sh cd's into it, so point
+      # it at $PWD. dotnet + cargo-llvm-cov are on the unified image's default
+      # PATH (proven by the hyades + gnostr-cloud coverage jobs); the script
+      # sets its own HOME=/tmp + reads the upload token from the pod env.
+      - |
+        set -e
+        export GITHUB_WORKSPACE="$PWD"
+        echo "dotnet: $(dotnet --version 2>&1 | head -1)   cargo-llvm-cov: $(cargo llvm-cov --version 2>&1 | head -1)"
+        bash scripts/ci/coverage-run.sh
