@@ -32,6 +32,24 @@ echo "dotnet: $(dotnet --version 2>&1)   cargo-llvm-cov: $(cargo llvm-cov --vers
 export MARKERS="$WS/.gnostr-cloud-ci-output.log"; : > "$MARKERS"
 if [ -f "$WS/.gnostr-cloud-ci-context.env" ]; then . "$WS/.gnostr-cloud-ci-context.env"; fi
 
+# ── STABLE per-repo target dir — the actual sccache cache-hit fix ──────────────
+# The runner hands every job a fresh per-commit workdir, so the default
+# `<workdir>/target` yields a brand-new dependency -L/--extern search path each
+# run → a different sccache key every time → 0% Rust hits and a full cold
+# rebuild of every registry dep on EVERY coverage run. Coverage is enqueued
+# serially per repo (campaign rule: ONE cov job), so a stable per-repo dir
+# under the host-mounted /cache (ariel runner) is safe and makes the bulk of
+# the build — the registry-dependency compiles — hit sccache across runs (and
+# lets cargo's own fingerprint DB persist). CARGO_INCREMENTAL=0 because sccache
+# cannot cache incremental compilation. Mirrors the canonical gc-uranus
+# coverage-run.sh (/cache/cov-target/<slug>).
+REPO_SLUG="$(git remote get-url origin 2>/dev/null | sed -E 's#\?.*$##; s#/+$##; s#.*/##; s#\.git$##')"
+[ -n "$REPO_SLUG" ] || REPO_SLUG="$(basename "$PWD")"
+export CARGO_TARGET_DIR="/cache/cov-target/${REPO_SLUG}"
+export CARGO_INCREMENTAL=0   # sccache cannot cache incremental compilation
+mkdir -p "$CARGO_TARGET_DIR"
+echo "coverage: stable CARGO_TARGET_DIR=$CARGO_TARGET_DIR (sccache-cacheable across runs)"
+
 # ── Rust: cargo-llvm-cov ─────────────────────────────────────────────────────
 if ! command -v cargo-llvm-cov >/dev/null; then
   echo "::error::cargo-llvm-cov not on PATH in the runner image" >&2; exit 127

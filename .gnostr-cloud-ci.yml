@@ -43,6 +43,19 @@ jobs:
         - master
       tags:
         - v*
+    variables:
+      # Rust build caching for the native ariel compile (clippy + test). The
+      # runner hands every job a fresh per-commit workdir; with the default
+      # `<workdir>/target` the dependency -L/--extern paths differ every run,
+      # so sccache keys differ → "Cache hits rate (Rust) 0.00%" even with a
+      # warm /cache. Pin CARGO_TARGET_DIR to a persistent per-repo path under
+      # /cache (mounted on the ariel runner) so registry-dep compiles — the
+      # bulk — hit sccache across runs. Separate leaf from coverage-run.sh's
+      # /cache/cov-target/<slug> so clippy's dev profile doesn't thrash against
+      # cargo-llvm-cov's instrumented build. CARGO_INCREMENTAL=0 because sccache
+      # cannot cache incremental compilation (and CI invalidates it anyway).
+      CARGO_INCREMENTAL: "0"
+      CARGO_TARGET_DIR: /cache/ci-target/orleans-rust-client
     script:
       - |
         set -e
